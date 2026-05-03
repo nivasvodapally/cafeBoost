@@ -35,7 +35,7 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [guestLoading, setGuestLoading] = useState(false);
   const [magicLoading, setMagicLoading] = useState(false);
-  // const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [forgotSent, setForgotSent] = useState(false);
   const [magicSent, setMagicSent] = useState(false);
@@ -103,26 +103,26 @@ export default function Auth() {
     navigate(returnTo);
   };
 
-  // const onGoogle = async () => {
-  //   setGoogleLoading(true); setError(null);
+  const onGoogle = async () => {
+    setGoogleLoading(true); setError(null);
     // Stash the intended destination so we can restore it after the OAuth redirect.
-  //   try { sessionStorage.setItem("cafeboost:postAuthReturnTo", returnTo); } catch { /* ignore */ }
-  //   const { data, error: err } = await supabase.auth.signInWithOAuth({
-  //     provider: "google",
-  //     options: {
-  //       redirectTo: oauthRedirectUrl(),
-  //       queryParams: { access_type: "offline", prompt: "consent" },
-  //     },
-  //   });
-  //   if (err) {
-  //     setGoogleLoading(false);
-  //     setError(err.message ?? "Google sign-in failed");
-  //     return;
-  //   }
-  //   if (data.url) return;
-  //   toast.success("Welcome!");
-  //   navigate(returnTo);
-  // };
+    try { sessionStorage.setItem("cafeboost:postAuthReturnTo", returnTo); } catch { /* ignore */ }
+    const { data, error: err } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: oauthRedirectUrl(),
+        queryParams: { access_type: "offline", prompt: "consent" },
+      },
+    });
+    if (err) {
+      setGoogleLoading(false);
+      setError(err.message ?? "Google sign-in failed");
+      return;
+    }
+    if (data.url) return;
+    toast.success("Welcome!");
+    navigate(returnTo);
+  };
 
   const onMagicLink = async () => {
     if (!email.trim()) { setError("Enter your email to get a magic link."); return; }
