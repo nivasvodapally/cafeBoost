@@ -2,7 +2,6 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { copyFileSync, existsSync } from "node:fs";
-import { componentTagger } from "lovable-tagger";
 
 const spaFallbackPlugin = () => ({
   name: "spa-404-fallback",
@@ -17,7 +16,7 @@ const spaFallbackPlugin = () => ({
 });
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig(() => ({
   server: {
     host: "::",
     port: 8080,
@@ -25,7 +24,7 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
   },
-  plugins: [react(), mode === "development" && componentTagger(), spaFallbackPlugin()].filter(Boolean),
+  plugins: [react(), spaFallbackPlugin()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

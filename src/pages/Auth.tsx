@@ -9,15 +9,13 @@ import { ArrowLeft, Loader2, Sparkles, Mail, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { signInAsGuest } from "@/hooks/useAuth";
-import { lovable } from "@/integrations/lovable";
 
 type Mode = "signin" | "signup" | "forgot";
 
 // Email/magic-link redirects use the hash router so the link lands on the right page.
 const authRedirectUrl = (path: string) => `${window.location.origin}/#${path.startsWith("/") ? path : `/${path}`}`;
-// OAuth (Google) redirect MUST be on the bare origin — Lovable's managed OAuth proxy
-// only allows the site origin as a callback target. The hash route is restored after
-// the redirect via the post-login navigate() below.
+// OAuth lands on the app origin; the hash route is restored after redirect via
+// the post-login navigate() below.
 const oauthRedirectUrl = () => window.location.origin;
 
 /**
@@ -109,15 +107,19 @@ export default function Auth() {
     setGoogleLoading(true); setError(null);
     // Stash the intended destination so we can restore it after the OAuth redirect.
     try { sessionStorage.setItem("cafeboost:postAuthReturnTo", returnTo); } catch { /* ignore */ }
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: oauthRedirectUrl(),
+    const { data, error: err } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: oauthRedirectUrl(),
+        queryParams: { access_type: "offline", prompt: "consent" },
+      },
     });
-    if (result.error) {
+    if (err) {
       setGoogleLoading(false);
-      setError(result.error.message ?? "Google sign-in failed");
+      setError(err.message ?? "Google sign-in failed");
       return;
     }
-    if (result.redirected) return;
+    if (data.url) return;
     toast.success("Welcome!");
     navigate(returnTo);
   };
