@@ -35,9 +35,6 @@ export default function Auth() {
   const [error, setError] = useState<string | null>(null);
   const [forgotSent, setForgotSent] = useState(false);
   const [magicSent, setMagicSent] = useState(false);
-  const [showGuestFields, setShowGuestFields] = useState(false);
-  const [guestName, setGuestName] = useState("");
-  const [guestPhone, setGuestPhone] = useState("");
   const [showEmail, setShowEmail] = useState(false);
   const navigate = useNavigate();
 
@@ -64,37 +61,13 @@ export default function Auth() {
     return () => { cancel = true; };
   }, [navigate, returnTo]);
 
-  const onContinueAsGuest = async (opts?: { skip?: boolean }) => {
-    // First click reveals the optional name/phone fields; second click (or Skip) creates the session.
-    if (!opts?.skip && !showGuestFields) {
-      setShowGuestFields(true);
-      return;
-    }
-    const fullName = opts?.skip ? "" : guestName.trim();
-    const phoneVal = opts?.skip ? "" : guestPhone.trim();
-
+  const onContinueAsGuest = async () => {
     setGuestLoading(true); setError(null);
-    const { user, error: err } = await signInAsGuest({
-      fullName: fullName || undefined,
-      phone: phoneVal || undefined,
-    });
+    const { error: err } = await signInAsGuest();
     if (err) { setGuestLoading(false); setError(err.message); return; }
 
-    // Persist name/phone on the profile row so all downstream orders/bookings show it.
-    if (user && (fullName || phoneVal)) {
-      const updates: { full_name?: string; phone?: string } = {};
-      if (fullName) updates.full_name = fullName;
-      if (phoneVal) updates.phone = phoneVal;
-      // Profile row is created by the handle_new_user trigger; update it now.
-      const { error: upErr } = await supabase
-        .from("profiles")
-        .update(updates)
-        .eq("user_id", user.id);
-      if (upErr) console.warn("Guest profile update failed:", upErr);
-    }
-
     setGuestLoading(false);
-    toast.success(fullName ? `Welcome, ${fullName.split(" ")[0]}!` : "You're in — explore as a guest");
+    toast.success("You're in - explore as a guest");
     navigate(returnTo);
   };
 
@@ -211,40 +184,14 @@ export default function Auth() {
                 {mode === "signin" ? "Order, book a table & track your rewards." : "Earn rewards at your favorite cafes."}
               </p>
 
-              {/* Guest CTA — primary fast path */}
-              {!showGuestFields ? (
-                <>
-                  <Button onClick={() => onContinueAsGuest()} variant="hero" size="lg" className="w-full mt-6 gap-2" disabled={guestLoading}>
-                    {guestLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Sparkles className="w-4 h-4" /> Continue as guest</>}
-                  </Button>
-                  <p className="text-xs text-muted-foreground text-center mt-2">
-                    Browse, order, and book — no signup. Upgrade anytime.
-                  </p>
-                </>
-              ) : (
-                <div className="mt-6 space-y-3 rounded-lg border border-border bg-muted/30 p-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="guest_name">Your name <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                    <Input id="guest_name" value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="Jane Doe" maxLength={80} autoFocus />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="guest_phone">Phone <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                    <Input id="guest_phone" type="tel" value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} placeholder="+1 555 123 4567" />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Adding a name helps the cafe recognise your orders.
-                  </p>
-                  {error && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</p>}
-                  <div className="flex items-center gap-2 pt-1">
-                    <Button onClick={() => onContinueAsGuest()} variant="hero" size="lg" className="flex-1 gap-2" disabled={guestLoading}>
-                      {guestLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Sparkles className="w-4 h-4" /> Continue</>}
-                    </Button>
-                    <button type="button" onClick={() => onContinueAsGuest({ skip: true })} className="text-sm text-muted-foreground hover:text-foreground px-3" disabled={guestLoading}>
-                      Skip
-                    </button>
-                  </div>
-                </div>
-              )}
+              {/* Guest CTA - primary fast path */}
+              <Button onClick={onContinueAsGuest} variant="hero" size="lg" className="w-full mt-6 gap-2" disabled={guestLoading}>
+                {guestLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Sparkles className="w-4 h-4" /> Continue as guest</>}
+              </Button>
+              <p className="text-xs text-muted-foreground text-center mt-2">
+                Browse, order, and book - no signup. Upgrade anytime.
+              </p>
+              {error && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2 mt-3">{error}</p>}
 
               <div className="relative my-5">
                 <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border" /></div>
