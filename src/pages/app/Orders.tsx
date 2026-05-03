@@ -167,7 +167,11 @@ export default function CustomerOrders() {
                     variant="hero"
                   />
                 )}
-                <Button variant="ghost" size="sm" onClick={() => navigate(`/app/orders/${o.id}/invoice`)}><Receipt className="w-3 h-3 mr-1" /> Invoice</Button>
+                {o.payment_status === "paid" && (
+                  <Button variant="ghost" size="sm" onClick={() => navigate(`/app/orders/${o.id}/invoice`)}>
+                    <Receipt className="w-3 h-3 mr-1" /> Invoice
+                  </Button>
+                )}
                 <Button variant="outline" size="sm" onClick={() => reorder(o)}><RotateCcw className="w-3 h-3 mr-1" /> Reorder</Button>
               </div>
             </Card>

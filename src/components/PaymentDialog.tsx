@@ -67,12 +67,27 @@ export function PaymentDialog({
 
   const isTest = mode?.razorpay_mode === "test";
 
-  const payCash = async () => {
+  // For CUSTOMERS — just marks intent, does NOT mark as paid
+  const chooseCash = async () => {
     setBusy(true);
-    const { error } = await supabase.rpc("mark_order_paid", { _order_id: orderId });
+    const { error } = await supabase
+      .rpc('set_payment_method', { _order_id: orderId, _method: 'cash' });
     setBusy(false);
     if (error) { toast.error(error.message); return; }
-    setPaid(true); toast.success("Cash payment recorded");
+    toast.success("Order placed! Pay cash at the counter when ready.");
+    onPaid?.();
+    setTimeout(() => onOpenChange(false), 900);
+  };
+
+  // For RUNNERS only — confirms cash was physically collected
+  const confirmCashCollected = async () => {
+    setBusy(true);
+    const { error } = await supabase
+      .rpc('mark_order_paid', { _order_id: orderId });
+    setBusy(false);
+    if (error) { toast.error(error.message); return; }
+    setPaid(true);
+    toast.success("Cash collected — order marked as paid");
     onPaid?.();
     setTimeout(() => onOpenChange(false), 900);
   };
@@ -154,20 +169,75 @@ export function PaymentDialog({
           </div>
         ) : (
           <div className="space-y-3">
-            <Button onClick={payUpi} variant="hero" size="lg" className="w-full gap-2 h-14" disabled={busy}>
-              <Smartphone className="w-5 h-5" />
-              <div className="text-left flex-1">
-                <p className="font-semibold">Pay with UPI</p>
-                <p className="text-[11px] opacity-80 font-normal">GPay · PhonePe · Paytm · any UPI app</p>
+            {runnerMode ? (
+              <div className="space-y-4">
+                <div className="rounded-xl bg-muted/50 p-4 text-center">
+                  <p className="text-3xl font-bold font-display">₹{amount.toFixed(2)}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Amount to collect from {customerName ?? "customer"}</p>
+                </div>
+
+                {/* Primary action for runner — collect cash */}
+                <Button
+                  onClick={confirmCashCollected}
+                  variant="default"
+                  size="lg"
+                  className="w-full gap-2 h-16 text-base"
+                  disabled={busy}
+                >
+                  <Banknote className="w-6 h-6" />
+                  <div className="text-left flex-1">
+                    <p className="font-bold">Collect ₹{amount.toFixed(2)} Cash</p>
+                    <p className="text-[11px] opacity-80 font-normal">Tap after receiving cash from customer</p>
+                  </div>
+                </Button>
+
+                {/* Secondary action — show QR for customer to scan and pay UPI themselves */}
+                <Button
+                  onClick={payUpi}
+                  variant="outline"
+                  size="lg"
+                  className="w-full gap-2 h-14"
+                  disabled={busy}
+                >
+                  <Smartphone className="w-5 h-5" />
+                  <div className="text-left flex-1">
+                    <p className="font-semibold">Show UPI QR to Customer</p>
+                    <p className="text-[11px] opacity-80 font-normal">Customer scans and pays via GPay / PhonePe</p>
+                  </div>
+                </Button>
               </div>
-            </Button>
-            <Button onClick={payCash} variant="outline" size="lg" className="w-full gap-2 h-14" disabled={busy}>
-              <Banknote className="w-5 h-5" />
-              <div className="text-left flex-1">
-                <p className="font-semibold">{runnerMode ? "Cash collected" : "I'll pay cash at the counter"}</p>
-                <p className="text-[11px] opacity-80 font-normal">{runnerMode ? "Mark this order as paid in cash" : "Order is sent now, pay when you arrive"}</p>
+            ) : (
+              /* CUSTOMER MODE — customer paying themselves */
+              <div className="space-y-3">
+                <Button
+                  onClick={payUpi}
+                  variant="hero"
+                  size="lg"
+                  className="w-full gap-2 h-14"
+                  disabled={busy}
+                >
+                  <Smartphone className="w-5 h-5" />
+                  <div className="text-left flex-1">
+                    <p className="font-semibold">Pay with UPI</p>
+                    <p className="text-[11px] opacity-80 font-normal">GPay · PhonePe · Paytm · any UPI app</p>
+                  </div>
+                </Button>
+
+                <Button
+                  onClick={chooseCash}
+                  variant="outline"
+                  size="lg"
+                  className="w-full gap-2 h-14"
+                  disabled={busy}
+                >
+                  <Banknote className="w-5 h-5" />
+                  <div className="text-left flex-1">
+                    <p className="font-semibold">Pay Cash at Counter</p>
+                    <p className="text-[11px] opacity-80 font-normal">Order is sent now — pay when you collect</p>
+                  </div>
+                </Button>
               </div>
-            </Button>
+            )}
 
             {isTest && mode?.allow_payment_simulation && (
               <div className="pt-3 mt-3 border-t border-border space-y-2">
