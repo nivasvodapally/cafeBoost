@@ -69,8 +69,7 @@ export function PaymentDialog({
 
   const payCash = async () => {
     setBusy(true);
-    const { error } = await (supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }> })
-      .rpc("mark_order_paid", { _order_id: orderId });
+    const { error } = await supabase.rpc("mark_order_paid", { _order_id: orderId });
     setBusy(false);
     if (error) { toast.error(error.message); return; }
     setPaid(true); toast.success("Cash payment recorded");
@@ -105,8 +104,7 @@ export function PaymentDialog({
 
   const simulate = async (outcome: "success" | "failure") => {
     setBusy(true);
-    const { error } = await (supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }> })
-      .rpc("simulate_payment", { _order_id: orderId, _outcome: outcome });
+    const { error } = await supabase.rpc("simulate_payment", { _order_id: orderId, _outcome: outcome });
     setBusy(false);
     if (error) { toast.error(error.message); return; }
     if (outcome === "success") {

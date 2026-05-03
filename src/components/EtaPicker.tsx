@@ -25,7 +25,7 @@ export function EtaPicker({ orderId, presets, currentMinutes, label = "Set ETA" 
       toast.error("Pick 0 – 240 minutes"); return;
     }
     setBusy(true);
-    const { error } = await (supabase as any).rpc("set_order_eta", { _order_id: orderId, _minutes: minutes });
+    const { error } = await supabase.rpc("set_order_eta", { _order_id: orderId, _minutes: minutes });
     setBusy(false);
     if (error) { toast.error(error.message); return; }
     toast.success(`ETA set to ${minutes} min`);

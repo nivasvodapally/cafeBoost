@@ -41,7 +41,7 @@ export default function StaffDashboard() {
   useEffect(() => {
     if (!cafe) return;
     void (async () => {
-      const { data } = await (supabase as any).from("cafes").select("eta_presets").eq("id", cafe.id).maybeSingle();
+      const { data } = await supabase.from("cafes").select("eta_presets").eq("id", cafe.id).maybeSingle();
       if (data?.eta_presets?.length) setPresets(data.eta_presets);
     })();
   }, [cafe]);
@@ -55,7 +55,7 @@ export default function StaffDashboard() {
       const { data } = await supabase.from("orders").select(SELECT).eq("cafe_id", cafe.id)
         .in("status", ["placed", "accepted", "preparing", "ready", "served"])
         .order("created_at", { ascending: false }).limit(150);
-      if (!cancelled) setOrders(((data as unknown as OrderRow[]) ?? []).map((o) => ({ ...o, order_items: o.order_items ?? [] })));
+      if (!cancelled) setOrders(((data as OrderRow[] | null) ?? []).map((o) => ({ ...o, order_items: o.order_items ?? [] })));
     };
 
     void fetchOrders().finally(() => { if (!cancelled) setLoading(false); });
@@ -77,12 +77,12 @@ export default function StaffDashboard() {
   }, [orders, role]);
 
   const advance = async (order: OrderRow, next: Status) => {
-    const { error } = await (supabase as any).rpc("advance_order_workflow", { _order_id: order.id, _next_status: next });
+    const { error } = await supabase.rpc("advance_order_workflow", { _order_id: order.id, _next_status: next });
     if (error) toast.error(error.message); else toast.success(`Order → ${next}`);
   };
   const cancel = async (id: string) => {
     if (!confirm("Cancel this order?")) return;
-    const { error } = await (supabase as any).rpc("cancel_order_by_staff", { _order_id: id });
+    const { error } = await supabase.rpc("cancel_order_by_staff", { _order_id: id });
     if (error) toast.error(error.message); else toast.success("Order cancelled");
   };
 
@@ -101,7 +101,7 @@ export default function StaffDashboard() {
             {o.table_no && <span className="text-[10px] bg-muted px-2 py-0.5 rounded-full">Table {o.table_no}</span>}
             {o.payment_status === "paid" && <span className="text-[10px] bg-success/15 text-success px-2 py-0.5 rounded-full font-semibold">PAID</span>}
             {o.payment_status === "pending" && <span className="text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full font-semibold">UNPAID</span>}
-            <EtaBadge minutes={(o as any).wait_eta_minutes} etaUpdatedAt={(o as any).eta_updated_at} status={o.status} />
+            <EtaBadge minutes={o.wait_eta_minutes} etaUpdatedAt={o.eta_updated_at} status={o.status} />
           </div>
           <p className="text-xs text-muted-foreground">{new Date(o.created_at).toLocaleTimeString()} · #{o.id.slice(0, 6)}</p>
           {o.notes && <p className="text-xs text-muted-foreground mt-1">📝 {o.notes}</p>}
@@ -125,7 +125,7 @@ export default function StaffDashboard() {
         {role === "chef" && (
           <>
             {["accepted", "preparing"].includes(o.status) && (
-              <EtaPicker orderId={o.id} presets={presets} currentMinutes={(o as any).wait_eta_minutes ?? undefined} />
+              <EtaPicker orderId={o.id} presets={presets} currentMinutes={o.wait_eta_minutes ?? undefined} />
             )}
             {o.status === "accepted" && (
               <Button variant="hero" size="sm" onClick={() => advance(o, "preparing")}><ChefHat className="w-3 h-3 mr-1" /> Start prep</Button>

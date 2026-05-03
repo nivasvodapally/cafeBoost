@@ -41,16 +41,16 @@ function PairingScreen({ onPaired }: { onPaired: (token: string, label: string |
       if (!pin.trim()) { toast.error("Enter the PIN"); return; }
     }
     setBusy(true);
-    const { data, error } = await (supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: { token: string } | null; error: { message: string } | null }> })
-      .rpc("kds_pair_device_v2", {
+    const { data, error } = await supabase.rpc("kds_pair_device_v2", {
         _code: mode === "code" ? code.trim() : null,
         _pin: mode === "pin" ? pin.trim() : null,
         _slug: mode === "pin" ? slug.trim().toLowerCase() : null,
         _label: label,
       });
     setBusy(false);
-    if (error || !data?.token) { toast.error(error?.message ?? "Pairing failed"); return; }
-    onPaired(data.token, label);
+    const paired = data as { token: string } | null;
+    if (error || !paired?.token) { toast.error(error?.message ?? "Pairing failed"); return; }
+    onPaired(paired.token, label);
   };
 
   return (
@@ -114,8 +114,7 @@ export default function KDSPage() {
   useEffect(() => { document.title = "KDS — Kitchen Display"; }, []);
 
   const fetchBoard = useCallback(async (tok: string) => {
-    const { data, error } = await (supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: KdsBoard | null; error: { message: string } | null }> })
-      .rpc("kds_get_orders", { _token: tok });
+    const { data, error } = await supabase.rpc("kds_get_orders", { _token: tok });
     if (error) {
       if (/Invalid KDS device/i.test(error.message)) {
         kdsDevice.clear(); setToken(null); toast.error("Device unpaired — please pair again");
@@ -124,7 +123,7 @@ export default function KDSPage() {
       }
       return;
     }
-    setBoard(data);
+    setBoard(data as KdsBoard | null);
   }, []);
 
   useEffect(() => {
@@ -152,8 +151,7 @@ export default function KDSPage() {
   const act = async (orderId: string, action: "prepare"|"ready"|"set_eta", etaMinutes?: number) => {
     if (!token) return;
     setBusyId(orderId);
-    const { error } = await (supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }> })
-      .rpc("kds_act_on_order", { _token: token, _order_id: orderId, _action: action, _eta_minutes: etaMinutes ?? null });
+    const { error } = await supabase.rpc("kds_act_on_order", { _token: token, _order_id: orderId, _action: action, _eta_minutes: etaMinutes ?? null });
     setBusyId(null);
     if (error) { toast.error(error.message); return; }
     setShowEta(null);

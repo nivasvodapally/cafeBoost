@@ -2,28 +2,21 @@ import { useContext, useEffect, useRef, useState, createContext, type ReactNode 
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { setActiveCafe } from "@/lib/cafeContext";
+import type { Tables } from "@/integrations/supabase/types";
 
 export type AppRole = "owner" | "customer" | "chef" | "runner";
 
-export type Profile = {
-  id: string;
-  user_id: string;
+export type Profile = Omit<Tables<"profiles">, "role" | "recent_cafes"> & {
   role: AppRole;
-  full_name: string | null;
-  email: string | null;
-  phone: string | null;
-  birthday: string | null;
-  cafe_id: string | null;
-  favorite_cafes: string[] | null;
   recent_cafes: Array<{ cafe_id: string; cafe_name: string; last_visited_at: string }> | null;
-  is_guest?: boolean;
-  claimed_at?: string | null;
-  tags?: string[];
-  notes?: string | null;
 };
 
 const PROFILE_COLS =
   "id, user_id, role, full_name, email, phone, birthday, cafe_id, favorite_cafes, recent_cafes, is_guest, claimed_at, tags, notes";
+
+function isAppRole(role: string): role is AppRole {
+  return role === "owner" || role === "customer" || role === "chef" || role === "runner";
+}
 
 type AuthState = {
   session: Session | null;
@@ -60,8 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         supabase.from("user_roles").select("role").eq("user_id", userId),
       ]);
       if (!mounted.current) return;
-      setProfile((prof as unknown as Profile) ?? null);
-      setRoles(((roleRows ?? []) as { role: AppRole }[]).map((r) => r.role));
+      setProfile((prof as Profile | null) ?? null);
+      setRoles((roleRows ?? []).map((r) => r.role).filter(isAppRole));
     };
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
@@ -102,8 +95,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       supabase.from("user_roles").select("role").eq("user_id", currentUser.id),
     ]);
     setUser(currentUser);
-    setProfile((prof as unknown as Profile) ?? null);
-    setRoles(((roleRows ?? []) as { role: AppRole }[]).map((r) => r.role));
+    setProfile((prof as Profile | null) ?? null);
+    setRoles((roleRows ?? []).map((r) => r.role).filter(isAppRole));
   };
 
   const isGuest = Boolean(

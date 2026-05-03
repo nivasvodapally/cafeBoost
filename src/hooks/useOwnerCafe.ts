@@ -1,33 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import type { Tables } from "@/integrations/supabase/types";
 
-export type OwnerCafe = {
-  id: string;
-  slug: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  address: string | null;
-  city: string | null;
-  state: string | null;
-  country: string | null;
-  logo_url: string | null;
-  banner_url: string | null;
-  description: string | null;
-  currency: string | null;
-  timezone: string | null;
-  opening_hours: Record<string, unknown> | null;
-  seating_capacity: number | null;
-  accept_online_orders: boolean;
-  accept_reservations: boolean;
-  loyalty_enabled: boolean;
-  onboarding_completed: boolean;
-  table_ordering_enabled: boolean;
-  sound_alerts_enabled: boolean;
-  tax_rate: number;
-  slot_capacity: number;
-};
+export type OwnerCafe = Tables<"cafes">;
 
 /**
  * useOwnerCafe — loads the cafe owned by the current authenticated user.
@@ -53,7 +29,7 @@ export function useOwnerCafe() {
       // eslint-disable-next-line no-console
       console.error("[useOwnerCafe]", error);
     }
-    setCafe((data as unknown as OwnerCafe) ?? null);
+    setCafe(data ?? null);
     setLoading(false);
   }, []);
 

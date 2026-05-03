@@ -10,6 +10,7 @@ import { useOwnerCafe } from "@/hooks/useOwnerCafe";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { clearCafePaymentModeCache } from "@/lib/cafePaymentMode";
+import type { Tables } from "@/integrations/supabase/types";
 
 const makePairingCode = () => {
   // 6-char human-friendly pairing code (no ambiguous chars).
@@ -30,7 +31,7 @@ export default function OwnerSettings() {
   });
   const [saving, setSaving] = useState(false);
   // KDS device management
-  type KdsDevice = { id: string; label: string | null; paired_at: string; last_seen_at: string | null; active: boolean };
+  type KdsDevice = Pick<Tables<"kds_devices">, "id" | "label" | "paired_at" | "last_seen_at" | "active">;
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
@@ -45,7 +46,6 @@ export default function OwnerSettings() {
 
   useEffect(() => {
     if (!cafe) return;
-    const c = cafe as unknown as { stuck_unaccepted_minutes?: number | null; stuck_kitchen_minutes?: number | null; stuck_ready_minutes?: number | null; eta_presets?: number[] | null };
     setForm({
       name: cafe.name, email: cafe.email ?? "", phone: cafe.phone ?? "",
       address: cafe.address ?? "", city: cafe.city ?? "", description: cafe.description ?? "",
@@ -56,22 +56,21 @@ export default function OwnerSettings() {
       loyalty_enabled: cafe.loyalty_enabled ?? true,
       table_ordering_enabled: cafe.table_ordering_enabled ?? false,
       sound_alerts_enabled: cafe.sound_alerts_enabled ?? true,
-      stuck_unaccepted_minutes: c.stuck_unaccepted_minutes ?? 2,
-      stuck_kitchen_minutes: c.stuck_kitchen_minutes ?? 10,
-      stuck_ready_minutes: c.stuck_ready_minutes ?? 5,
-      eta_presets: (c.eta_presets ?? [5, 10, 15, 20, 30]).join(","),
+      stuck_unaccepted_minutes: cafe.stuck_unaccepted_minutes ?? 2,
+      stuck_kitchen_minutes: cafe.stuck_kitchen_minutes ?? 10,
+      stuck_ready_minutes: cafe.stuck_ready_minutes ?? 5,
+      eta_presets: (cafe.eta_presets ?? [5, 10, 15, 20, 30]).join(","),
     });
-    const cc = cafe as unknown as { kds_pairing_code?: string | null; razorpay_mode?: "test"|"live"|null; allow_payment_simulation?: boolean | null };
-    setPairingCode(cc.kds_pairing_code ?? null);
-    setPaymentMode((cc.razorpay_mode as "test"|"live") ?? "test");
-    setAllowSimulation(cc.allow_payment_simulation ?? true);
+    setPairingCode(cafe.kds_pairing_code ?? null);
+    setPaymentMode(cafe.razorpay_mode === "live" ? "live" : "test");
+    setAllowSimulation(cafe.allow_payment_simulation ?? true);
   }, [cafe]);
 
   // Load paired KDS devices for this cafe.
   useEffect(() => {
     if (!cafe) return;
     let cancel = false;
-    void (supabase as any)
+    void supabase
       .from("kds_devices")
       .select("id, label, paired_at, last_seen_at, active")
       .eq("cafe_id", cafe.id)
@@ -86,7 +85,7 @@ export default function OwnerSettings() {
     if (!cafe) return;
     setGenCodeBusy(true);
     const code = makePairingCode();
-    const { error } = await (supabase as any).from("cafes").update({
+    const { error } = await supabase.from("cafes").update({
       kds_pairing_code: code,
       kds_pairing_code_set_at: new Date().toISOString(),
     }).eq("id", cafe.id);
@@ -106,7 +105,7 @@ export default function OwnerSettings() {
     const enc = new TextEncoder().encode(`${cafe.id}:${pin}`);
     const buf = await crypto.subtle.digest("SHA-256", enc);
     const hashed = Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
-    const { error } = await (supabase as any).from("cafes").update({ kds_pin_hash: hashed }).eq("id", cafe.id);
+    const { error } = await supabase.from("cafes").update({ kds_pin_hash: hashed }).eq("id", cafe.id);
     setSavingPin(false);
     if (error) { toast.error(error.message); return; }
     setPin(""); setConfirmPin("");
@@ -115,7 +114,7 @@ export default function OwnerSettings() {
 
   const revokeDevice = async (id: string) => {
     if (!confirm("Sign this kitchen device out? It will need to pair again.")) return;
-    const { error } = await (supabase as any).from("kds_devices").update({ active: false }).eq("id", id);
+    const { error } = await supabase.from("kds_devices").update({ active: false }).eq("id", id);
     if (error) { toast.error(error.message); return; }
     setDevices((d) => d.map((x) => x.id === id ? { ...x, active: false } : x));
     toast.success("Device revoked");
@@ -124,7 +123,7 @@ export default function OwnerSettings() {
   const savePaymentSettings = async () => {
     if (!cafe) return;
     setSavingPayment(true);
-    const { error } = await (supabase as any).from("cafes").update({
+    const { error } = await supabase.from("cafes").update({
       razorpay_mode: paymentMode,
       allow_payment_simulation: allowSimulation,
     }).eq("id", cafe.id);
@@ -142,7 +141,7 @@ export default function OwnerSettings() {
     if (!cafe) return;
     setSaving(true);
     const presets = form.eta_presets.split(",").map(s => parseInt(s.trim(), 10)).filter(n => Number.isFinite(n) && n >= 0 && n <= 240);
-    const { error } = await (supabase as any).from("cafes").update({
+    const { error } = await supabase.from("cafes").update({
       name: form.name, email: form.email || null, phone: form.phone || null,
       address: form.address || null, city: form.city || null, description: form.description || null,
       accept_online_orders: form.accept_online_orders, accept_reservations: form.accept_reservations, loyalty_enabled: form.loyalty_enabled,

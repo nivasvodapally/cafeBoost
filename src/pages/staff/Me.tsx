@@ -23,7 +23,7 @@ export default function StaffMe() {
     let cancelled = false;
     setLoading(true);
     void (async () => {
-      const { data } = await (supabase as any).rpc("get_my_staff_stats", { _days: days });
+      const { data } = await supabase.rpc("get_my_staff_stats", { _days: days });
       if (!cancelled) { setStats((data as Stats) ?? null); setLoading(false); }
     })();
     return () => { cancelled = true; };

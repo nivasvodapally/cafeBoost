@@ -41,10 +41,9 @@ const SELECT = "*, order_items(id, name, price, quantity)";
 let _audioCtx: AudioContext | null = null;
 function getAudioCtx(): AudioContext | null {
   try {
-    const warmed = (window as unknown as { __cafeboost_audio_ctx?: AudioContext }).__cafeboost_audio_ctx;
+    const warmed = window.__cafeboost_audio_ctx;
     if (warmed) { if (warmed.state === "suspended") void warmed.resume(); return warmed; }
-    type W = Window & { webkitAudioContext?: typeof AudioContext };
-    const Ctx = window.AudioContext || (window as W).webkitAudioContext;
+    const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!Ctx) return null;
     if (!_audioCtx) _audioCtx = new Ctx();
     if (_audioCtx.state === "suspended") void _audioCtx.resume();
@@ -89,7 +88,7 @@ export default function OwnerOrders() {
         .eq("cafe_id", cafe.id)
         .order("created_at", { ascending: false }).limit(150);
       if (cancelled) return;
-      const list = ((data as unknown as OrderRow[]) ?? []).map(o => ({ ...o, order_items: o.order_items ?? [] }));
+      const list = ((data as OrderRow[] | null) ?? []).map(o => ({ ...o, order_items: o.order_items ?? [] }));
       list.forEach(o => seenOrderIds.current.add(o.id));
       setOrders(list);
       setLoading(false);
@@ -107,7 +106,7 @@ export default function OwnerOrders() {
           seenOrderIds.current.add(fresh.id);
           // Re-fetch with items in one shot.
           const { data } = await supabase.from("orders").select(SELECT).eq("id", fresh.id).maybeSingle();
-          const full = (data as unknown as OrderRow | null) ?? { ...fresh, order_items: [] };
+          const full = (data as OrderRow | null) ?? { ...fresh, order_items: [] };
           setOrders(prev => [full, ...prev]);
           toast.success(`New order from ${fresh.customer_name}`, { description: `₹${Number(fresh.total_amount).toFixed(2)}` });
           if (cafe.sound_alerts_enabled !== false) playBeep();

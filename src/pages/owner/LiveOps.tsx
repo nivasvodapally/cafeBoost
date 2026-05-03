@@ -7,12 +7,14 @@ import { Button } from "@/components/ui/button";
 import { useOwnerCafe } from "@/hooks/useOwnerCafe";
 import { supabase } from "@/integrations/supabase/client";
 import { PaymentDialog } from "@/components/PaymentDialog";
+import type { Database } from "@/integrations/supabase/types";
 
 type Order = { id: string; customer_name: string; table_no: string|null; source: string; status: string; payment_status: string;
   total_amount: number; created_at: string; age_seconds: number; stuck_reason: string|null;
   assignee_name: string|null; assignee_role: string|null; wait_eta_minutes: number|null };
 type Staff = { user_id: string; role: string; name: string; on_shift: boolean; on_break: boolean; orders_today: number };
 type Board = { orders: Order[]; staff: Staff[]; config: { stuck_unaccepted_minutes: number; stuck_kitchen_minutes: number; stuck_ready_minutes: number } };
+type Status = Database["public"]["Enums"]["order_status"];
 
 const stagePill: Record<string, string> = {
   placed: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
@@ -31,9 +33,8 @@ export default function OwnerLiveOps() {
 
   const load = useCallback(async () => {
     if (!cafe) return;
-    const { data, error } = await (supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: Board | null; error: { message: string } | null }> })
-      .rpc("get_live_ops_board", { _cafe_id: cafe.id });
-    if (error) toast.error(error.message); else setBoard(data);
+    const { data, error } = await supabase.rpc("get_live_ops_board", { _cafe_id: cafe.id });
+    if (error) toast.error(error.message); else setBoard(data as Board | null);
     setLoading(false);
   }, [cafe]);
 
@@ -49,15 +50,13 @@ export default function OwnerLiveOps() {
     return () => { clearInterval(t); if (channelRef.current) void supabase.removeChannel(channelRef.current); };
   }, [cafe, load]);
 
-  const advance = async (id: string, next: string) => {
-    const { error } = await (supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }> })
-      .rpc("advance_order_workflow", { _order_id: id, _next_status: next });
+  const advance = async (id: string, next: Status) => {
+    const { error } = await supabase.rpc("advance_order_workflow", { _order_id: id, _next_status: next });
     if (error) toast.error(error.message); else toast.success(`→ ${next}`);
   };
   const cancel = async (id: string) => {
     if (!confirm("Cancel this order?")) return;
-    const { error } = await (supabase as unknown as { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }> })
-      .rpc("cancel_order_by_staff", { _order_id: id });
+    const { error } = await supabase.rpc("cancel_order_by_staff", { _order_id: id });
     if (error) toast.error(error.message); else toast.success("Cancelled");
   };
 

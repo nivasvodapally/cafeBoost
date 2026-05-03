@@ -15,7 +15,7 @@ const cache = new Map<string, CafePaymentMode>();
 export async function getCafePaymentMode(cafeId: string): Promise<CafePaymentMode> {
   const cached = cache.get(cafeId);
   if (cached) return cached;
-  const { data } = await (supabase as unknown as { from: (t: string) => { select: (c: string) => { eq: (col: string, v: string) => { maybeSingle: () => Promise<{ data: CafePaymentMode | null }> } } } })
+  const { data } = await supabase
     .from("cafes")
     .select("razorpay_mode, allow_payment_simulation")
     .eq("id", cafeId)

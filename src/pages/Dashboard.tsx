@@ -40,7 +40,7 @@ export default function Dashboard() {
     setLoadingStats(true);
     void supabase.rpc("get_owner_analytics", { _cafe_id: cafe.id, _start: startDate, _end: endDate })
       .then(({ data: d, error }) => {
-        if (!error && d) setData(d as unknown as Analytics);
+        if (!error && d) setData(d as Analytics);
         setLoadingStats(false);
       });
   }, [cafe, startDate, endDate]);

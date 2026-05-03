@@ -38,7 +38,7 @@ export default function StaffJoin() {
   useEffect(() => { if (invite) setCode(invite); }, [invite]);
   const joinWithCode = async () => {
     if (!code.trim()) throw new Error("Open a staff invite link or paste a valid invite code.");
-    const { error: joinError } = await (supabase as any).rpc("join_staff_with_code", { _code: code.trim(), _full_name: fullName.trim() || null });
+    const { error: joinError } = await supabase.rpc("join_staff_with_code", { _code: code.trim(), _full_name: fullName.trim() || null });
     if (joinError) throw joinError;
     await refreshProfile();
     toast.success("Staff access activated");

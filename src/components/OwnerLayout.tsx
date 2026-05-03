@@ -37,13 +37,12 @@ export function OwnerLayout({
   useEffect(() => {
     const unlock = () => {
       try {
-        type W = Window & { webkitAudioContext?: typeof AudioContext };
-        const Ctx = window.AudioContext || (window as W).webkitAudioContext;
+        const Ctx = window.AudioContext || window.webkitAudioContext;
         if (!Ctx) return;
         const ctx = new Ctx();
         if (ctx.state === "suspended") void ctx.resume();
         // Stash on window so OwnerOrders' playBeep can reuse it.
-        (window as unknown as { __cafeboost_audio_ctx?: AudioContext }).__cafeboost_audio_ctx = ctx;
+        window.__cafeboost_audio_ctx = ctx;
       } catch { /* ignore */ }
       window.removeEventListener("click", unlock);
       window.removeEventListener("keydown", unlock);

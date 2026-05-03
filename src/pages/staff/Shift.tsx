@@ -10,6 +10,8 @@ import { useStaffCafe } from "@/hooks/useStaffCafe";
 
 type ShiftRow = { id: string; clock_in_at: string; clock_out_at: string | null; total_break_seconds: number };
 type OpenInfo = { open_shift: { id: string; clock_in_at: string } | null; open_break: { id: string; started_at: string } | null };
+type StaffStats = OpenInfo;
+type ShiftRpc = "clock_in" | "clock_out" | "start_break" | "end_break";
 
 const fmtDur = (sec: number) => {
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
@@ -28,21 +30,22 @@ export default function StaffShift() {
   const load = useCallback(async () => {
     if (!user) return;
     const [{ data: stats }, { data: hist }] = await Promise.all([
-      (supabase as any).rpc("get_my_staff_stats", { _days: 30 }),
-      supabase.from("staff_shifts" as any).select("id, clock_in_at, clock_out_at, total_break_seconds")
+      supabase.rpc("get_my_staff_stats", { _days: 30 }),
+      supabase.from("staff_shifts").select("id, clock_in_at, clock_out_at, total_break_seconds")
         .eq("user_id", user.id).order("clock_in_at", { ascending: false }).limit(20),
     ]);
-    setInfo({ open_shift: (stats as any)?.open_shift ?? null, open_break: (stats as any)?.open_break ?? null });
-    setHistory(((hist as unknown) as ShiftRow[]) ?? []);
+    const typedStats = stats as StaffStats | null;
+    setInfo({ open_shift: typedStats?.open_shift ?? null, open_break: typedStats?.open_break ?? null });
+    setHistory((hist as ShiftRow[] | null) ?? []);
     setLoading(false);
   }, [user]);
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { const i = setInterval(() => setTick((t) => t + 1), 1000); return () => clearInterval(i); }, []);
 
-  const call = async (rpc: string, ok: string) => {
+  const call = async (rpc: ShiftRpc, ok: string) => {
     setBusy(true);
-    const { error } = await (supabase as any).rpc(rpc);
+    const { error } = await supabase.rpc(rpc);
     if (error) toast.error(error.message); else toast.success(ok);
     await load(); setBusy(false);
   };

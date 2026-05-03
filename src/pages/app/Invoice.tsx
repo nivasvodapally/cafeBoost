@@ -28,7 +28,7 @@ export default function CustomerInvoice() {
     void (async () => {
       const { data: o } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
       if (!o) { setLoading(false); return; }
-      setOrder(o as unknown as Order);
+      setOrder(o);
       const [{ data: oi }, { data: c }] = await Promise.all([
         supabase.from("order_items").select("id, name, price, quantity").eq("order_id", id),
         supabase.from("cafes").select("name, address, city, phone, email, currency, tax_rate").eq("id", o.cafe_id).maybeSingle(),

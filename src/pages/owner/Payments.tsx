@@ -40,7 +40,7 @@ export default function OwnerPayments() {
     if (!cafe) return;
     setLoading(true);
     const { start, end } = rangeDates(range);
-    const { data: res, error } = await (supabase as any).rpc("get_payments_dashboard", { _cafe_id: cafe.id, _start: start, _end: end });
+    const { data: res, error } = await supabase.rpc("get_payments_dashboard", { _cafe_id: cafe.id, _start: start, _end: end });
     if (error) toast.error(error.message);
     else setData(res as Dashboard);
     setLoading(false);

@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth, type AppRole } from "./useAuth";
+import type { Tables } from "@/integrations/supabase/types";
 
-export type StaffCafe = {
-  id: string;
-  slug: string;
-  name: string;
-  currency: string | null;
-  sound_alerts_enabled?: boolean | null;
-};
+export type StaffCafe = Pick<Tables<"cafes">, "id" | "slug" | "name" | "currency" | "sound_alerts_enabled">;
 
 export type StaffAssignment = {
   id: string;
@@ -26,7 +21,7 @@ export function useStaffCafe() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async (uid: string) => {
-    const { data: staff, error } = await (supabase as any)
+    const { data: staff, error } = await supabase
       .from("cafe_staff")
       .select("id, cafe_id, user_id, role, status, joined_at")
       .eq("user_id", uid)
@@ -34,7 +29,7 @@ export function useStaffCafe() {
       .maybeSingle();
 
     if (error) console.error("[useStaffCafe]", error);
-    setAssignment((staff as StaffAssignment) ?? null);
+    setAssignment((staff as StaffAssignment | null) ?? null);
 
     if (staff?.cafe_id) {
       const { data: cafeRow } = await supabase
@@ -42,7 +37,7 @@ export function useStaffCafe() {
         .select("id, slug, name, currency, sound_alerts_enabled")
         .eq("id", staff.cafe_id)
         .maybeSingle();
-      setCafe((cafeRow as unknown as StaffCafe) ?? null);
+      setCafe(cafeRow ?? null);
     } else {
       setCafe(null);
     }

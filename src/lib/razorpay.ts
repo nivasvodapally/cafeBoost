@@ -3,7 +3,7 @@ let loading: Promise<void> | null = null;
 
 function loadScript(): Promise<void> {
   if (typeof window === "undefined") return Promise.reject(new Error("no window"));
-  if ((window as unknown as { Razorpay?: unknown }).Razorpay) return Promise.resolve();
+  if (window.Razorpay) return Promise.resolve();
   if (loading) return loading;
   loading = new Promise((resolve, reject) => {
     const s = document.createElement("script");
@@ -30,8 +30,8 @@ type RzpOpts = {
 
 export async function openRazorpayCheckout(opts: RzpOpts) {
   await loadScript();
-  const W = window as unknown as { Razorpay: new (o: Record<string, unknown>) => { open: () => void } };
-  const rzp = new W.Razorpay({
+  if (!window.Razorpay) throw new Error("Razorpay failed to initialize");
+  const rzp = new window.Razorpay({
     key: opts.key,
     amount: opts.amount,
     currency: "INR",

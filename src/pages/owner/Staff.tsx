@@ -21,6 +21,7 @@ type Performance = {
   revenue_touched: number; avg_prep_seconds: number; avg_serve_seconds: number; hours_worked: number; on_shift: boolean;
 };
 type ShiftEntry = { id: string; user_id: string; name: string; role: string; clock_in_at: string; clock_out_at: string | null; total_break_seconds: number };
+type PerformancePayload = { staff?: Performance[] };
 
 const makeCode = () => `RUN-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 const makeInviteToken = () => (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).replace(/-/g, "");
@@ -45,11 +46,11 @@ export default function OwnerStaff() {
     if (!cafe) return;
     const [codeRes, perfRes, shiftRes] = await Promise.all([
       supabase.from("cafe_staff_codes").select("id, code, token, role, active, used_count, max_uses, created_at").eq("cafe_id", cafe.id).order("created_at", { ascending: false }),
-      (supabase as any).rpc("get_staff_performance", { _cafe_id: cafe.id, _days: days }),
-      (supabase as any).rpc("get_staff_shifts", { _cafe_id: cafe.id, _days: 14 }),
+      supabase.rpc("get_staff_performance", { _cafe_id: cafe.id, _days: days }),
+      supabase.rpc("get_staff_shifts", { _cafe_id: cafe.id, _days: 14 }),
     ]);
     setCodes((codeRes.data as StaffCode[]) ?? []);
-    setPerf(((perfRes.data as any)?.staff as Performance[]) ?? []);
+    setPerf(((perfRes.data as PerformancePayload | null)?.staff) ?? []);
     setShifts((shiftRes.data as ShiftEntry[]) ?? []);
     setLoading(false);
   }, [cafe, days]);
