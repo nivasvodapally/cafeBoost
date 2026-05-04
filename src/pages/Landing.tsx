@@ -24,9 +24,21 @@ const pricing = [
 ];
 
 const testimonials = [
-  { quote: "Repeat visits jumped 38% in two months. Our regulars feel seen — that's the magic.", name: "Sofia Alvarez", role: "Owner, Aurora Coffee" },
-  { quote: "Bookings used to be chaos. Now Sundays run themselves and the team actually enjoys service.", name: "Daniel Park", role: "GM, North Brew House" },
-  { quote: "The loyalty program paid for CafeBoost in the first week. Honestly a no-brainer.", name: "Priya Shah", role: "Founder, Kindling Café" },
+  {
+    quote: "We're piloting CafeBoost at our cafe and the QR ordering flow is exactly what we needed for busy weekend mornings.",
+    name: "Early Access Cafe",
+    role: "Chennai, Tamil Nadu"
+  },
+  {
+    quote: "Setup took less than 20 minutes. Menu was live, QR was printed, and the first order came in the same day.",
+    name: "Founding Cafe Partner",
+    role: "Bangalore, Karnataka"
+  },
+  {
+    quote: "The loyalty system is simple enough that our regulars actually use it — that's rare.",
+    name: "Independent Cafe Owner",
+    role: "Hyderabad, Telangana"
+  },
 ];
 
 export default function Landing() {
@@ -74,7 +86,7 @@ export default function Landing() {
                 <div className="flex">
                   {[...Array(5)].map((_, i) => <Star key={i} className="w-4 h-4 fill-accent text-accent" />)}
                 </div>
-                <span className="font-semibold text-foreground">4.9</span> from 1,200+ cafes
+                <span className="font-semibold text-foreground">Early access</span> — free for founding cafes
               </div>
             </div>
           </div>
@@ -131,6 +143,9 @@ export default function Landing() {
                   <span className="font-display text-5xl font-bold">{p.price}</span>
                   <span className="text-muted-foreground">{p.period}</span>
                 </div>
+                {p.cta === "Start Free Trial" && (
+                  <p className="text-xs text-success font-medium mt-1">30-day free trial · No card required</p>
+                )}
                 <Link to="/for-cafes/auth" className="block mt-6">
                   <Button variant={p.featured ? "hero" : "outline"} className="w-full">{p.cta}</Button>
                 </Link>
@@ -170,7 +185,7 @@ export default function Landing() {
         <div className="max-w-3xl mx-auto px-4 text-center text-accent-foreground">
           <Coffee className="w-10 h-10 mx-auto mb-4 opacity-80" />
           <h2 className="font-display text-3xl md:text-4xl font-bold">Ready to grow your cafe?</h2>
-          <p className="mt-3 text-lg opacity-80">Join 1,200+ cafes using CafeBoost to increase repeat customers.</p>
+          <p className="mt-3 text-lg opacity-80">Be among the first cafes in India to run fully contactless operations.</p>
           <Link to="/for-cafes/auth">
             <Button variant="outline" size="xl" className="mt-8 bg-background/20 border-background/40 hover:bg-background/30">
               Start Free Trial <ArrowRight className="w-4 h-4 ml-1" />

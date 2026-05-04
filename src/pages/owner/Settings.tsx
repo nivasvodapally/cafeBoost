@@ -22,12 +22,14 @@ const makePairingCode = () => {
 
 export default function OwnerSettings() {
   const { cafe, loading, refresh } = useOwnerCafe();
-  const [form, setForm] = useState<{ name: string; email: string; phone: string; address: string; city: string; description: string; accept_online_orders: boolean; accept_reservations: boolean; loyalty_enabled: boolean; table_ordering_enabled: boolean; sound_alerts_enabled: boolean; stuck_unaccepted_minutes: number; stuck_kitchen_minutes: number; stuck_ready_minutes: number; eta_presets: string }>({
+  const [form, setForm] = useState<{ name: string; email: string; phone: string; address: string; city: string; description: string; accept_online_orders: boolean; accept_reservations: boolean; loyalty_enabled: boolean; table_ordering_enabled: boolean; sound_alerts_enabled: boolean; stuck_unaccepted_minutes: number; stuck_kitchen_minutes: number; stuck_ready_minutes: number; eta_presets: string; gstin: string; tax_rate: number; }>({
     name: "", email: "", phone: "", address: "", city: "", description: "",
     accept_online_orders: true, accept_reservations: true, loyalty_enabled: true,
     table_ordering_enabled: false, sound_alerts_enabled: true,
     stuck_unaccepted_minutes: 2, stuck_kitchen_minutes: 10, stuck_ready_minutes: 5,
     eta_presets: "5,10,15,20,30",
+    gstin: "",
+    tax_rate: 0,
   });
   const [saving, setSaving] = useState(false);
   // KDS device management
@@ -60,6 +62,8 @@ export default function OwnerSettings() {
       stuck_kitchen_minutes: cafe.stuck_kitchen_minutes ?? 10,
       stuck_ready_minutes: cafe.stuck_ready_minutes ?? 5,
       eta_presets: (cafe.eta_presets ?? [5, 10, 15, 20, 30]).join(","),
+      gstin: (cafe as { gstin?: string | null }).gstin ?? "",
+      tax_rate: (cafe as { tax_rate?: number | null }).tax_rate ?? 0,
     });
     setPairingCode(cafe.kds_pairing_code ?? null);
     setPaymentMode(cafe.razorpay_mode === "live" ? "live" : "test");
@@ -150,6 +154,8 @@ export default function OwnerSettings() {
       stuck_kitchen_minutes: form.stuck_kitchen_minutes,
       stuck_ready_minutes: form.stuck_ready_minutes,
       eta_presets: presets.length ? presets : [5, 10, 15, 20, 30],
+      gstin: form.gstin.trim() || null,
+      tax_rate: Number(form.tax_rate),
     }).eq("id", cafe.id);
     setSaving(false);
     if (error) { toast.error(error.message); return; }
@@ -167,6 +173,40 @@ export default function OwnerSettings() {
           <div className="space-y-2"><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></div>
           <div className="space-y-2"><Label>Phone</Label><Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} /></div>
           <div className="space-y-2"><Label>City</Label><Input value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} /></div>
+          {/* GST Rate */}
+          <div className="space-y-1.5">
+            <Label htmlFor="tax_rate">GST Rate (%)</Label>
+            <Input
+              id="tax_rate"
+              type="number"
+              min={0}
+              max={28}
+              step={0.5}
+              placeholder="0"
+              value={form.tax_rate}
+              onChange={e => setForm(f => ({ ...f, tax_rate: Number(e.target.value) }))}
+            />
+            <p className="text-xs text-muted-foreground">
+              Standard rates: 5% (small cafes) or 18% (with ITC). Set to 0 if you don't charge GST.
+              This splits equally as CGST + SGST on invoices.
+            </p>
+          </div>
+
+          {/* GSTIN */}
+          <div className="space-y-1.5">
+            <Label htmlFor="gstin">GSTIN <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Input
+              id="gstin"
+              placeholder="e.g. 33AAAAA0000A1Z5"
+              value={form.gstin}
+              onChange={e => setForm(f => ({ ...f, gstin: e.target.value.toUpperCase() }))}
+              maxLength={15}
+            />
+            <p className="text-xs text-muted-foreground">
+              Your 15-digit GST Identification Number. Only needed if your cafe is GST registered
+              (annual turnover above ₹20 lakhs). Adding this converts receipts into proper Tax Invoices.
+            </p>
+          </div>
           <div className="space-y-2 sm:col-span-2"><Label>Address</Label><Input value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} /></div>
           <div className="space-y-2 sm:col-span-2"><Label>Description</Label><Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
         </div>

@@ -96,7 +96,7 @@ export default function CustomerLanding() {
                 <div className="flex">
                   {[...Array(5)].map((_, i) => <Star key={i} className="w-4 h-4 fill-accent text-accent" />)}
                 </div>
-                <span className="font-semibold text-foreground">4.9</span> loved by 50,000+ coffee lovers
+                <span className="font-semibold text-foreground">New</span> — discover cafes near you
               </div>
             </div>
           </div>

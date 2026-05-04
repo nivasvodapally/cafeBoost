@@ -8,9 +8,11 @@ import { supabase } from "@/integrations/supabase/client";
 type Order = {
   id: string; created_at: string; paid_at: string | null;
   customer_name: string; customer_phone: string | null;
-  status: string; payment_status: string; source: string; table_no: string | null;
-  subtotal: number; tax_amount: number; total_amount: number; earned_points: number; notes: string | null;
-  cafe_id: string;
+  status: string; payment_status: string; payment_method: string | null;
+  source: string; table_no: string | null;
+  subtotal: number; tax_amount: number; total_amount: number;
+  earned_points: number; notes: string | null; cafe_id: string;
+  invoice_number: string | null; discount_amount: number;
 };
 type Item = { id: string; name: string; price: number; quantity: number };
 type Cafe = { name: string; address: string | null; city: string | null; phone: string | null; email: string | null; currency: string | null; tax_rate: number | null; gstin: string | null; };
@@ -80,8 +82,12 @@ export default function CustomerInvoice() {
               {cafe?.gstin && <p className="text-xs text-muted-foreground">GSTIN: {cafe.gstin}</p>}
             </div>
             <div className="text-right">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Invoice</p>
-              <p className="font-mono text-sm font-bold">#{order.id.slice(0, 8).toUpperCase()}</p>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+                {cafe?.gstin ? "Tax Invoice" : "Receipt"}
+              </p>
+              <p className="font-mono text-sm font-bold">
+                {order.invoice_number ?? `#${order.id.slice(0, 8).toUpperCase()}`}
+              </p>
               <p className="text-xs text-muted-foreground mt-1">{new Date(order.created_at).toLocaleString()}</p>
               <span className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold mt-2 px-2 py-1 rounded-full ${isPaid ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>
                 {isPaid ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
@@ -100,8 +106,17 @@ export default function CustomerInvoice() {
               <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-1">Order info</p>
               <p className="text-xs text-muted-foreground">Source: <span className="text-foreground">{order.source}</span></p>
               {order.table_no && <p className="text-xs text-muted-foreground">Table: <span className="text-foreground">{order.table_no}</span></p>}
+              {cafe?.gstin && (
+                <p className="text-xs text-muted-foreground">
+                  SAC Code: <span className="text-foreground">996331</span>
+                </p>
+              )}
               <p className="text-xs text-muted-foreground">Status: <span className="text-foreground">{order.status}</span></p>
-              <p className="text-xs text-muted-foreground">Payment: <span className="text-foreground">Cash</span></p>
+              <p className="text-xs text-muted-foreground">
+                Payment: <span className="text-foreground capitalize">
+                  {order.payment_method === "upi" ? "UPI" : order.payment_method === "cash" ? "Cash" : "Pending"}
+                </span>
+              </p>
             </div>
           </section>
 
@@ -129,25 +144,42 @@ export default function CustomerInvoice() {
           <div className="ml-auto w-full sm:w-72 space-y-1 text-sm">
             <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{fmt(Number(order.subtotal))}</span></div>
             {Number(order.tax_amount) > 0 && (
-              <>
+              cafe?.gstin && cafe?.tax_rate ? (
+                /* GST registered cafe — show proper CGST + SGST split */
+                <>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">
+                      CGST @ {((cafe.tax_rate) / 2).toFixed(1)}%
+                    </span>
+                    <span>{fmt(Number(order.tax_amount) / 2)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">
+                      SGST @ {((cafe.tax_rate) / 2).toFixed(1)}%
+                    </span>
+                    <span>{fmt(Number(order.tax_amount) / 2)}</span>
+                  </div>
+                </>
+              ) : (
+                /* Non-GST cafe — just show as taxes & charges */
                 <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">
-                    CGST ({((cafe?.tax_rate ?? 0) / 2).toFixed(1)}%)
-                  </span>
-                  <span>{fmt(Number(order.tax_amount) / 2)}</span>
+                  <span className="text-muted-foreground">Taxes & charges</span>
+                  <span>{fmt(Number(order.tax_amount))}</span>
                 </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">
-                    SGST ({((cafe?.tax_rate ?? 0) / 2).toFixed(1)}%)
-                  </span>
-                  <span>{fmt(Number(order.tax_amount) / 2)}</span>
-                </div>
-              </>
+              )
+            )}
+            {Number(order.discount_amount) > 0 && (
+              <div className="flex justify-between text-xs text-success">
+                <span>Discount</span>
+                <span>− {fmt(Number(order.discount_amount))}</span>
+              </div>
             )}
             <div className="flex justify-between font-bold text-base pt-2 border-t border-border mt-2"><span>Total</span><span>{fmt(Number(order.total_amount))}</span></div>
-            <p className="text-[10px] text-muted-foreground mt-1">
-              *GST included in price (CGST + SGST)
-            </p>
+            {cafe?.gstin && (
+              <p className="text-[11px] text-muted-foreground mt-1 font-mono">
+                GSTIN: {cafe.gstin}
+              </p>
+            )}
             {order.earned_points > 0 && (
               <div className="flex justify-between text-xs text-accent-foreground bg-accent-soft px-2 py-1.5 rounded mt-3">
                 <span>Loyalty points {isPaid ? "earned" : "pending"}</span><span className="font-bold">+{order.earned_points} pts</span>
