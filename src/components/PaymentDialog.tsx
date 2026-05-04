@@ -97,7 +97,10 @@ export function PaymentDialog({
     try {
       const { data, error } = await supabase.functions.invoke("razorpay-create-order", { body: { order_id: orderId } });
       if (error) throw error;
+      // Edge function returns { error: "..." } on business errors
+      if (data?.error) throw new Error(data.error);
       const d = data as { key_id: string; razorpay_order_id: string; amount: number };
+      if (!d.razorpay_order_id) throw new Error("Failed to create payment order — please try again");
       setWaitingUpi(true);
       await openRazorpayCheckout({
         amount: d.amount,
@@ -109,7 +112,15 @@ export function PaymentDialog({
         onDismiss: () => { setWaitingUpi(false); toast("Checkout closed — you can retry anytime"); },
       });
     } catch (e) {
-      toast.error((e as Error).message);
+      const msg = (e as Error).message || "Payment failed";
+      // Provide a friendlier message for common configuration errors
+      if (msg.includes("keys not configured") || msg.includes("RAZORPAY")) {
+        toast.error("Payment gateway not configured yet. Please contact the cafe owner.");
+      } else if (msg.includes("already paid")) {
+        toast.info("This order is already paid!");
+      } else {
+        toast.error(msg);
+      }
       setWaitingUpi(false);
     } finally {
       setBusy(false);

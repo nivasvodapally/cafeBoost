@@ -203,6 +203,7 @@ export type Database = {
           description: string | null
           email: string | null
           eta_presets: number[]
+          gstin: string | null
           id: string
           kds_pairing_code: string | null
           kds_pairing_code_set_at: string | null
@@ -215,6 +216,8 @@ export type Database = {
           owner_user_id: string | null
           phone: string | null
           points_per_currency: number
+          razorpay_key_id: string | null
+          razorpay_key_secret: string | null
           razorpay_mode: string
           seating_capacity: number | null
           slot_capacity: number
@@ -241,6 +244,7 @@ export type Database = {
           description?: string | null
           email?: string | null
           eta_presets?: number[]
+          gstin?: string | null
           id?: string
           kds_pairing_code?: string | null
           kds_pairing_code_set_at?: string | null
@@ -253,6 +257,8 @@ export type Database = {
           owner_user_id?: string | null
           phone?: string | null
           points_per_currency?: number
+          razorpay_key_id?: string | null
+          razorpay_key_secret?: string | null
           razorpay_mode?: string
           seating_capacity?: number | null
           slot_capacity?: number
@@ -279,6 +285,7 @@ export type Database = {
           description?: string | null
           email?: string | null
           eta_presets?: number[]
+          gstin?: string | null
           id?: string
           kds_pairing_code?: string | null
           kds_pairing_code_set_at?: string | null
@@ -291,6 +298,8 @@ export type Database = {
           owner_user_id?: string | null
           phone?: string | null
           points_per_currency?: number
+          razorpay_key_id?: string | null
+          razorpay_key_secret?: string | null
           razorpay_mode?: string
           seating_capacity?: number | null
           slot_capacity?: number
@@ -618,10 +627,12 @@ export type Database = {
           customer_name: string
           customer_phone: string | null
           customer_user_id: string | null
+          discount_amount: number
           earned_points: number
           eta_set_by: string | null
           eta_updated_at: string | null
           id: string
+          invoice_number: string | null
           notes: string | null
           paid_at: string | null
           payment_method: string | null
@@ -657,10 +668,12 @@ export type Database = {
           customer_name: string
           customer_phone?: string | null
           customer_user_id?: string | null
+          discount_amount?: number
           earned_points?: number
           eta_set_by?: string | null
           eta_updated_at?: string | null
           id?: string
+          invoice_number?: string | null
           notes?: string | null
           paid_at?: string | null
           payment_method?: string | null
@@ -696,10 +709,12 @@ export type Database = {
           customer_name?: string
           customer_phone?: string | null
           customer_user_id?: string | null
+          discount_amount?: number
           earned_points?: number
           eta_set_by?: string | null
           eta_updated_at?: string | null
           id?: string
+          invoice_number?: string | null
           notes?: string | null
           paid_at?: string | null
           payment_method?: string | null

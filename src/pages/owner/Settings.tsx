@@ -62,8 +62,8 @@ export default function OwnerSettings() {
       stuck_kitchen_minutes: cafe.stuck_kitchen_minutes ?? 10,
       stuck_ready_minutes: cafe.stuck_ready_minutes ?? 5,
       eta_presets: (cafe.eta_presets ?? [5, 10, 15, 20, 30]).join(","),
-      gstin: (cafe as { gstin?: string | null }).gstin ?? "",
-      tax_rate: (cafe as { tax_rate?: number | null }).tax_rate ?? 0,
+      gstin: cafe.gstin ?? "",
+      tax_rate: cafe.tax_rate ?? 0,
     });
     setPairingCode(cafe.kds_pairing_code ?? null);
     setPaymentMode(cafe.razorpay_mode === "live" ? "live" : "test");
