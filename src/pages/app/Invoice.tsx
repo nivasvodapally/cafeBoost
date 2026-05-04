@@ -65,6 +65,14 @@ export default function CustomerInvoice() {
   const fmt = (n: number) => new Intl.NumberFormat(undefined, { style: "currency", currency }).format(Number(n) || 0);
   const isPaid = order.payment_status === "paid";
 
+  // Sanity check — tax can never exceed subtotal
+  const safeTaxAmount = Math.min(Number(order.tax_amount), Number(order.subtotal));
+  const computedTotal = Number(order.subtotal) + safeTaxAmount - Number(order.discount_amount || 0);
+  // Use order.total_amount but sanity check it matches computed
+  const displayTotal = Math.abs(Number(order.total_amount) - computedTotal) < 1
+    ? Number(order.total_amount)  // DB value is correct, use it
+    : computedTotal;               // DB value is wrong, use computed
+
   return (
     <div className="min-h-screen bg-muted/30 py-8 print:bg-white print:py-0">
       <div className="max-w-2xl mx-auto px-4">
@@ -143,7 +151,7 @@ export default function CustomerInvoice() {
 
           <div className="ml-auto w-full sm:w-72 space-y-1 text-sm">
             <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{fmt(Number(order.subtotal))}</span></div>
-            {Number(order.tax_amount) > 0 && (
+            {safeTaxAmount > 0 && (
               cafe?.gstin && cafe?.tax_rate ? (
                 /* GST registered cafe — show proper CGST + SGST split */
                 <>
@@ -151,20 +159,20 @@ export default function CustomerInvoice() {
                     <span className="text-muted-foreground">
                       CGST @ {((cafe.tax_rate) / 2).toFixed(1)}%
                     </span>
-                    <span>{fmt(Number(order.tax_amount) / 2)}</span>
+                    <span>{fmt(safeTaxAmount / 2)}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">
                       SGST @ {((cafe.tax_rate) / 2).toFixed(1)}%
                     </span>
-                    <span>{fmt(Number(order.tax_amount) / 2)}</span>
+                    <span>{fmt(safeTaxAmount / 2)}</span>
                   </div>
                 </>
               ) : (
                 /* Non-GST cafe — just show as taxes & charges */
                 <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">Taxes & charges</span>
-                  <span>{fmt(Number(order.tax_amount))}</span>
+                  <span>{fmt(safeTaxAmount)}</span>
                 </div>
               )
             )}
@@ -174,7 +182,7 @@ export default function CustomerInvoice() {
                 <span>− {fmt(Number(order.discount_amount))}</span>
               </div>
             )}
-            <div className="flex justify-between font-bold text-base pt-2 border-t border-border mt-2"><span>Total</span><span>{fmt(Number(order.total_amount))}</span></div>
+            <div className="flex justify-between font-bold text-base pt-2 border-t border-border mt-2"><span>Total</span><span>{fmt(displayTotal)}</span></div>
             {cafe?.gstin && (
               <p className="text-[11px] text-muted-foreground mt-1 font-mono">
                 GSTIN: {cafe.gstin}
