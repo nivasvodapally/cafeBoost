@@ -100,7 +100,6 @@ export function PaymentDialog({
       const d = data as { key_id: string; razorpay_order_id: string; amount: number };
       setWaitingUpi(true);
       await openRazorpayCheckout({
-        key: d.key_id,
         amount: d.amount,
         order_id: d.razorpay_order_id,
         name: cafeName ?? "Cafe",

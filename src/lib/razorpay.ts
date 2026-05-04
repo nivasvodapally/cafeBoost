@@ -17,7 +17,6 @@ function loadScript(): Promise<void> {
 }
 
 type RzpOpts = {
-  key: string;
   amount: number;
   order_id: string;
   name: string;
@@ -31,8 +30,11 @@ type RzpOpts = {
 export async function openRazorpayCheckout(opts: RzpOpts) {
   await loadScript();
   if (!window.Razorpay) throw new Error("Razorpay failed to initialize");
+  const key = import.meta.env.VITE_RAZORPAY_KEY_ID;
+  if (!key) throw new Error("Razorpay key not configured");
+  
   const rzp = new window.Razorpay({
-    key: opts.key,
+    key: key,
     amount: opts.amount,
     currency: "INR",
     order_id: opts.order_id,
