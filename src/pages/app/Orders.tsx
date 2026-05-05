@@ -1,203 +1,212 @@
-import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ClipboardList, Loader2, RotateCcw, Check, ChefHat, PackageCheck, X, Receipt, AlertCircle } from "lucide-react";
+import { Loader2, ShoppingBag, Check, X, RotateCcw, AlertCircle, ChefHat, Package, Utensils } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { EtaBadge } from "@/components/EtaBadge";
-import { PayWithUpiButton } from "@/components/PayWithUpiButton";
+import { useNavigate } from "react-router-dom";
+import { setActiveCafe } from "@/lib/cafeContext";
 
-type Status = "placed" | "accepted" | "preparing" | "ready" | "completed" | "cancelled";
-type Order = {
-  id: string; status: Status; total_amount: number; subtotal: number; tax_amount: number;
-  created_at: string; customer_name: string; customer_phone: string | null; cafe_id: string; payment_status: string; source: string;
+type Order = { 
+  id: string; status: string; total_amount: number; subtotal: number; tax_amount: number; created_at: string; customer_name: string; customer_phone: string | null; cafe_id: string; payment_status: string; source: string;
   wait_eta_minutes?: number | null; eta_updated_at?: string | null; cancellation_requested: boolean;
+  refund_requested: boolean; refunded_at?: string | null;
+  refund_workflow_status?: 'none' | 'requested' | 'refunded' | 'rejected';
+  refund_rejection_reason?: string | null;
 };
 type OrderItem = { id: string; order_id: string; name: string; price: number; quantity: number; menu_item_id: string | null };
 
-const TIMELINE: { key: Status; label: string; icon: typeof Check }[] = [
-  { key: "placed", label: "Placed", icon: ClipboardList },
-  { key: "accepted", label: "Accepted", icon: Check },
-  { key: "preparing", label: "Preparing", icon: ChefHat },
-  { key: "ready", label: "Ready", icon: PackageCheck },
-  { key: "completed", label: "Done", icon: Check },
+const TIMELINE = [
+  { key: "placed", label: "Placed", icon: ShoppingBag },
+  { key: "accepted", label: "Preparing", icon: ChefHat },
+  { key: "ready", label: "Ready", icon: Package },
+  { key: "completed", label: "Enjoy", icon: Utensils },
 ];
-
-function statusIndex(s: Status) {
-  const order: Status[] = ["placed", "accepted", "preparing", "ready", "completed"];
-  return order.indexOf(s);
-}
 
 export default function CustomerOrders() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
   const [items, setItems] = useState<Record<string, OrderItem[]>>({});
   const [loading, setLoading] = useState(true);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const navigate = useNavigate();
 
-  useEffect(() => {
+  const fetchAll = async () => {
     if (!user) return;
-    let cancelled = false;
-    const fetchAll = async () => {
-      const { data } = await supabase.from("orders")
-        .select("id, status, total_amount, subtotal, tax_amount, created_at, customer_name, customer_phone, cafe_id, payment_status, source, wait_eta_minutes, eta_updated_at")
-        .eq("customer_user_id", user.id)
-        .order("created_at", { ascending: false }).limit(50);
-      if (cancelled) return;
-      const list = (data as Order[]) ?? [];
-      setOrders(list);
-      if (list.length) {
-        const { data: oi } = await supabase.from("order_items")
-          .select("id, order_id, name, price, quantity, menu_item_id")
-          .in("order_id", list.map(o => o.id));
-        const map: Record<string, OrderItem[]> = {};
-        (oi ?? []).forEach((r) => { (map[r.order_id] ||= []).push(r as OrderItem); });
-        if (!cancelled) setItems(map);
-      }
-      if (!cancelled) setLoading(false);
-    };
-    void fetchAll();
-    const poll = setInterval(() => void fetchAll(), 15_000);
-
-    if (channelRef.current) { void supabase.removeChannel(channelRef.current); channelRef.current = null; }
-    const ch = supabase
-      .channel(`my-orders:${user.id}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders", filter: `customer_user_id=eq.${user.id}` },
-        (p) => {
-          const updated = p.new as Order;
-          setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o));
-          if (updated.status === "ready") toast.success(`Your order is ready!`);
-          else if (updated.status === "accepted") toast(`Order accepted by the cafe.`);
-        })
-      .subscribe();
-    channelRef.current = ch;
-
-    return () => {
-      cancelled = true;
-      clearInterval(poll);
-      if (channelRef.current) { void supabase.removeChannel(channelRef.current); channelRef.current = null; }
-    };
-  }, [user]);
-
-  const reorder = async (o: Order) => {
-    const lines = items[o.id] ?? [];
-    if (!lines.length) { toast.error("Order details not loaded yet"); return; }
-    const cartKey = `cafeboost:cart:${o.cafe_id}`;
-    const cart = lines.map(l => ({
-      id: l.menu_item_id ?? "", category: "Reorder", name: l.name,
-      description: null, price: Number(l.price), tags: [], available: true, qty: l.quantity,
-    })).filter(l => l.id);
-    if (!cart.length) { toast.error("These items are no longer available"); return; }
-    try { localStorage.setItem(cartKey, JSON.stringify(cart)); } catch { /* ignore */ }
-    toast.success("Cart filled with previous order");
-    navigate("/app/menu");
+    const { data } = await supabase.from("orders")
+      .select("*, order_items(*)")
+      .eq("customer_user_id", user.id)
+      .order("created_at", { ascending: false }).limit(50);
+    
+    if (data) {
+      setOrders(data as any[]);
+      const map: Record<string, OrderItem[]> = {};
+      data.forEach((o: any) => map[o.id] = o.order_items || []);
+      setItems(map);
+    }
+    setLoading(false);
   };
 
+  useEffect(() => {
+    void fetchAll();
+    const sub = supabase.channel(`customer_orders:${user?.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `customer_user_id=eq.${user?.id}` }, () => {
+        void fetchAll();
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(sub); };
+  }, [user]);
+
   const cancelByCustomer = async (id: string) => {
-    if (!confirm("Request cancellation for this order? Staff will confirm shortly.")) return;
+    if (!confirm("Request cancellation?")) return;
     const { error } = await supabase.rpc("cancel_order_by_customer", { _order_id: id });
-    if (error) {
-      toast.error(error.message || "Could not request cancellation");
-    } else {
-      toast.success("Cancellation request sent to staff");
-      setOrders(prev => prev.map(o => o.id === id ? { ...o, cancellation_requested: true } : o));
+    if (error) toast.error(error.message);
+    else toast.success("Request sent");
+  };
+
+  const requestRefund = async (id: string) => {
+    if (!confirm("Initiate a refund request?")) return;
+    const { data, error } = await supabase.rpc("initiate_refund_request", { _order_id: id });
+    if (error) toast.error(error.message);
+    else if (data && !(data as any).success) toast.error((data as any).error);
+    else toast.success("Refund request sent");
+  };
+
+  const handleReorder = async (o: Order) => {
+    setLoading(true);
+    try {
+      // 1. Get cafe details to set context
+      const { data: cafe } = await supabase.from("cafes").select("id, slug, name").eq("id", o.cafe_id).single();
+      if (!cafe) throw new Error("Cafe not found");
+
+      setActiveCafe({ id: cafe.id, slug: cafe.slug, name: cafe.name });
+
+      // 2. Populate cart
+      const orderItems = items[o.id] || [];
+      const cart = orderItems.map(i => ({
+        id: i.menu_item_id || i.id,
+        name: i.name,
+        price: Number(i.price),
+        qty: i.quantity,
+        category: "Order History",
+        available: true
+      }));
+      
+      localStorage.setItem(`cafeboost:cart:${o.cafe_id}`, JSON.stringify(cart));
+      
+      // 3. Go to menu
+      toast.success(`Items from ${cafe.name} added to cart`);
+      navigate("/app/menu");
+    } catch (e) {
+      toast.error("Could not reorder");
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (loading) return <CustomerLayout title="My Orders"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin" /></div></CustomerLayout>;
+  if (loading) return <CustomerLayout title="My Orders"><div className="grid place-items-center h-64"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div></CustomerLayout>;
 
   return (
     <CustomerLayout title="My Orders">
-      {orders.length === 0 ? (
-        <Card className="p-10 text-center">
-          <ClipboardList className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
-          <p className="font-display text-xl font-bold">No orders yet</p>
-          <p className="text-sm text-muted-foreground mt-2">Order from the menu and your live status will show here.</p>
-          <Button variant="hero" className="mt-6" onClick={() => navigate("/app/menu")}>Browse menu</Button>
-        </Card>
-      ) : (
-        <div className="space-y-4">{orders.map(o => {
-          const idx = statusIndex(o.status);
-          const cancelled = o.status === "cancelled";
+      <div className="space-y-4 pb-20 px-4">
+        {orders.length === 0 ? (
+          <div className="text-center py-20 bg-muted/30 rounded-3xl border border-dashed border-border px-6">
+            <ShoppingBag className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+            <p className="font-display text-xl font-bold">No orders yet</p>
+          </div>
+        ) : orders.map(o => {
+          const currentIdx = TIMELINE.findIndex(t => t.key === o.status);
+          const idx = currentIdx === -1 && o.status === "delivered" ? 3 : currentIdx;
+          
           return (
-            <Card key={o.id} className="p-4">
-              <div className="flex items-center justify-between gap-3 mb-3">
+            <Card key={o.id} className="p-4 overflow-hidden">
+              <div className="flex justify-between items-start mb-4">
                 <div>
-                  <p className="text-sm font-semibold">Order #{o.id.slice(0, 6).toUpperCase()}</p>
-                  <p className="text-xs text-muted-foreground">{new Date(o.created_at).toLocaleString()}</p>
+                  <p className="text-sm font-bold">Order #{o.id.slice(0, 6).toUpperCase()}</p>
+                  <p className="text-[10px] text-muted-foreground">{new Date(o.created_at).toLocaleString()}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-bold">₹{Number(o.total_amount).toFixed(2)}</p>
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{o.payment_status}</p>
-                  <EtaBadge minutes={o.wait_eta_minutes} etaUpdatedAt={o.eta_updated_at} status={o.status} className="mt-1" />
+                  <p className="text-sm font-bold text-accent">₹{Number(o.total_amount).toFixed(2)}</p>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${o.payment_status === 'paid' ? 'bg-success/10 text-success' : 'bg-amber-500/10 text-amber-600'}`}>{o.payment_status.toUpperCase()}</span>
                 </div>
               </div>
-              {cancelled ? (
-                <div className="flex items-center gap-2 text-destructive text-xs font-medium bg-destructive/10 rounded-lg px-3 py-2">
-                  <X className="w-3.5 h-3.5" /> Order cancelled
+
+              {/* Status Section */}
+              {o.status === "cancelled" ? (
+                <div className="bg-destructive/5 border border-destructive/10 rounded-xl p-3 mb-4">
+                  <div className="flex items-center gap-2 text-destructive font-bold text-xs mb-1">
+                    <X className="w-4 h-4" /> Order Cancelled
+                  </div>
+                  
+                  {o.payment_status === "paid" && (
+                    <div className="mt-2 pt-2 border-t border-destructive/10">
+                      {o.refund_workflow_status === 'requested' ? (
+                        <div className="text-[10px] text-amber-600 font-bold italic animate-pulse flex items-center gap-2">
+                          <RotateCcw className="w-3 h-3" /> Refund pending manager review
+                        </div>
+                      ) : o.refund_workflow_status === 'refunded' ? (
+                        <div className="text-[10px] text-success font-bold flex items-center gap-2 uppercase">
+                          <Check className="w-3 h-3" /> Amount Refunded
+                        </div>
+                      ) : o.refund_workflow_status === 'rejected' ? (
+                        <div className="space-y-2">
+                          <div className="text-[10px] text-destructive font-bold flex items-center gap-2 uppercase">
+                            <X className="w-3 h-3" /> Refund Request Denied
+                          </div>
+                          {o.refund_rejection_reason && <p className="text-[10px] text-muted-foreground italic px-2 py-1 bg-white/50 rounded text-center border border-destructive/5">"{o.refund_rejection_reason}"</p>}
+                          <Button variant="outline" size="sm" className="w-full h-7 text-[10px]" onClick={() => requestRefund(o.id)}>Request Again</Button>
+                        </div>
+                      ) : (
+                        <Button variant="hero" size="sm" className="w-full h-8" onClick={() => requestRefund(o.id)}>
+                          <RotateCcw className="w-3 h-3 mr-1" /> Request Refund
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : o.cancellation_requested ? (
-                <div className="flex items-center gap-2 text-amber-600 text-xs font-medium bg-amber-500/10 rounded-lg px-3 py-2">
-                  <AlertCircle className="w-3.5 h-3.5" /> Cancellation pending staff approval
+                <div className="bg-amber-500/5 border border-amber-500/10 rounded-xl p-3 mb-4 flex items-center gap-2 text-amber-600 font-bold text-xs">
+                  <AlertCircle className="w-4 h-4" /> Cancellation Pending
                 </div>
               ) : (
-                <div className="flex items-center justify-between gap-1 mb-3">
+                <div className="flex justify-between mb-4 px-2">
                   {TIMELINE.map((step, i) => {
                     const reached = i <= idx;
                     const Icon = step.icon;
                     return (
-                      <div key={step.key} className="flex-1 flex flex-col items-center">
-                        <div className={`w-7 h-7 rounded-full grid place-items-center text-[10px] ${reached ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground"}`}>
-                          <Icon className="w-3.5 h-3.5" />
+                      <div key={step.key} className="flex flex-col items-center">
+                        <div className={`w-8 h-8 rounded-full grid place-items-center ${reached ? "bg-accent text-accent-foreground shadow-lg shadow-accent/20" : "bg-muted text-muted-foreground"}`}>
+                          <Icon className="w-4 h-4" />
                         </div>
-                        <span className={`text-[10px] mt-1 ${reached ? "text-foreground font-semibold" : "text-muted-foreground"}`}>{step.label}</span>
+                        <span className={`text-[8px] mt-1 font-bold uppercase ${reached ? "text-foreground" : "text-muted-foreground"}`}>{step.label}</span>
                       </div>
                     );
                   })}
                 </div>
               )}
-              {(items[o.id] ?? []).length > 0 && (
-                <div className="border-t border-border pt-3 mt-2 space-y-1">
-                  {items[o.id].map(li => (
-                    <div key={li.id} className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">{li.quantity}× {li.name}</span>
-                      <span>₹{(Number(li.price) * li.quantity).toFixed(2)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="mt-3 flex justify-end gap-2">
-                {!cancelled && o.payment_status === "pending" && (
-                  <PayWithUpiButton
-                    orderId={o.id}
-                    cafeId={o.cafe_id}
-                    customerName={o.customer_name}
-                    customerPhone={o.customer_phone}
-                    amount={Number(o.total_amount)}
-                    size="sm"
-                    variant="hero"
-                  />
+
+              {/* Items List */}
+              <div className="space-y-1 mb-4 border-t border-border/50 pt-3">
+                {(items[o.id] || []).map(item => (
+                  <div key={item.id} className="flex justify-between text-xs text-muted-foreground">
+                    <span>{item.quantity}× {item.name}</span>
+                    <span>₹{(item.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Bottom Actions */}
+              <div className="flex gap-2">
+                {!o.cancellation_requested && o.status !== "cancelled" && (o.status === "placed" || o.status === "accepted") && (
+                  <Button variant="outline" size="sm" className="flex-1 text-destructive border-destructive/20 h-8" onClick={() => cancelByCustomer(o.id)}>Cancel</Button>
                 )}
-                {o.payment_status === "paid" && (
-                  <Button variant="ghost" size="sm" onClick={() => navigate(`/app/orders/${o.id}/invoice`)}>
-                    <Receipt className="w-3 h-3 mr-1" /> Invoice
-                  </Button>
-                )}
-                {!cancelled && !o.cancellation_requested && (o.status === "placed" || o.status === "accepted") && (
-                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => cancelByCustomer(o.id)}>
-                    <X className="w-3 h-3 mr-1" /> Cancel
-                  </Button>
-                )}
-                <Button variant="outline" size="sm" onClick={() => reorder(o)}><RotateCcw className="w-3 h-3 mr-1" /> Reorder</Button>
+                <Button variant="outline" size="sm" className="flex-1 h-8" onClick={() => handleReorder(o)}><RotateCcw className="w-3 h-3 mr-1" /> Reorder</Button>
               </div>
             </Card>
           );
-        })}</div>
-      )}
+        })}
+      </div>
     </CustomerLayout>
   );
 }

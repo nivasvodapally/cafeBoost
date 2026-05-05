@@ -122,11 +122,11 @@ export default function StaffDashboard() {
         <div className="flex flex-col items-end gap-1">
           <p className="text-sm font-bold">₹{Number(o.total_amount).toFixed(2)}</p>
           <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full ${
-            o.payment_status === 'pending' 
-              ? "bg-amber-500 text-white animate-pulse shadow-lg" 
-              : "bg-success/15 text-success"
+            o.payment_status === 'paid' 
+              ? "bg-success/15 text-success"
+              : (o.status === 'cancelled' ? "bg-muted text-muted-foreground" : "bg-amber-500 text-white animate-pulse shadow-lg")
           }`}>
-            {o.payment_status === 'paid' ? 'PAID' : (o.payment_method === 'cash' ? 'COLLECT CASH' : 'PAYMENT PENDING')}
+            {o.payment_status === 'paid' ? 'PAID' : (o.status === 'cancelled' ? 'UNPAID' : (o.payment_method === 'cash' ? 'COLLECT CASH' : 'PAYMENT PENDING'))}
           </span>
           {o.payment_status === 'paid' && o.payment_method === 'cash' && o.collector_name && (
             <span className="text-[9px] text-muted-foreground italic">Collected by {o.collector_name}</span>

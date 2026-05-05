@@ -1,0 +1,1 @@
+-- Empty migration to keep history in sync
