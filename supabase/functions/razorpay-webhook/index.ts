@@ -23,7 +23,9 @@ Deno.serve(async (req) => {
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
   try {
-    if (evt.event === "payment.captured" || evt.event === "payment.authorized") {
+    if (evt.event === "payment.captured") {
+      // NOTE: We do NOT treat "payment.authorized" as paid.
+      // authorized = bank hold only; captured = money received.
       const p = evt.payload?.payment?.entity;
       const orderId = p?.notes?.cafe_order_id;
       if (orderId) {
@@ -33,6 +35,7 @@ Deno.serve(async (req) => {
           _rzp_order_id: p.order_id ?? null,
           _rzp_payment_id: p.id ?? null,
           _rzp_signature: sig,
+          _paid_amount_paise: p.amount ?? null,  // amount in paise for server-side validation
         });
         // Look up cafe_id for the log
         const { data: ord } = await admin.from("orders").select("cafe_id").eq("id", orderId).single();
