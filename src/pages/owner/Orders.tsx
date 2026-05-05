@@ -281,7 +281,7 @@ export default function OwnerOrders() {
                 )}
 
                 <div className="mt-4 flex gap-2 justify-end flex-wrap">
-                  {o.payment_status === "pending" && (
+                  {o.payment_status === "pending" && o.status !== "cancelled" && (
                     <PayWithUpiButton
                       orderId={o.id}
                       cafeId={cafe.id}

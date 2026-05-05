@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, ShoppingBag, Check, X, RotateCcw, AlertCircle, ChefHat, Package, Utensils } from "lucide-react";
+import { Loader2, ShoppingBag, Check, X, RotateCcw, AlertCircle, ChefHat, Package, Utensils, ReceiptText, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -10,7 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { setActiveCafe } from "@/lib/cafeContext";
 
 type Order = { 
-  id: string; status: string; total_amount: number; subtotal: number; tax_amount: number; created_at: string; customer_name: string; customer_phone: string | null; cafe_id: string; payment_status: string; source: string;
+  id: string; status: string; total_amount: number; subtotal: number; tax_amount: number; created_at: string; customer_name: string; customer_phone: string | null; cafe_id: string; payment_status: string; source: string; table_no: string | null;
   wait_eta_minutes?: number | null; eta_updated_at?: string | null; cancellation_requested: boolean;
   refund_requested: boolean; refunded_at?: string | null;
   refund_workflow_status?: 'none' | 'requested' | 'refunded' | 'rejected';
@@ -20,9 +20,10 @@ type OrderItem = { id: string; order_id: string; name: string; price: number; qu
 
 const TIMELINE = [
   { key: "placed", label: "Placed", icon: ShoppingBag },
-  { key: "accepted", label: "Preparing", icon: ChefHat },
+  { key: "accepted", label: "Accepted", icon: CheckCircle2 },
+  { key: "preparing", label: "Preparing", icon: ChefHat },
   { key: "ready", label: "Ready", icon: Package },
-  { key: "completed", label: "Enjoy", icon: Utensils },
+  { key: "completed", label: "Done", icon: Utensils },
 ];
 
 export default function CustomerOrders() {
@@ -49,9 +50,10 @@ export default function CustomerOrders() {
   };
 
   useEffect(() => {
+    if (!user) return;
     void fetchAll();
-    const sub = supabase.channel(`customer_orders:${user?.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `customer_user_id=eq.${user?.id}` }, () => {
+    const sub = supabase.channel(`customer_orders:${user.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `customer_user_id=eq.${user.id}` }, () => {
         void fetchAll();
       })
       .subscribe();
@@ -59,14 +61,14 @@ export default function CustomerOrders() {
   }, [user]);
 
   const cancelByCustomer = async (id: string) => {
-    if (!confirm("Request cancellation?")) return;
+    if (!confirm("Request cancellation? Staff will review.")) return;
     const { error } = await supabase.rpc("cancel_order_by_customer", { _order_id: id });
     if (error) toast.error(error.message);
     else toast.success("Request sent");
   };
 
   const requestRefund = async (id: string) => {
-    if (!confirm("Initiate a refund request?")) return;
+    if (!confirm("Initiate a refund request for this order?")) return;
     const { data, error } = await supabase.rpc("initiate_refund_request", { _order_id: id });
     if (error) toast.error(error.message);
     else if (data && !(data as any).success) toast.error((data as any).error);
@@ -76,13 +78,9 @@ export default function CustomerOrders() {
   const handleReorder = async (o: Order) => {
     setLoading(true);
     try {
-      // 1. Get cafe details to set context
       const { data: cafe } = await supabase.from("cafes").select("id, slug, name").eq("id", o.cafe_id).single();
       if (!cafe) throw new Error("Cafe not found");
-
       setActiveCafe({ id: cafe.id, slug: cafe.slug, name: cafe.name });
-
-      // 2. Populate cart
       const orderItems = items[o.id] || [];
       const cart = orderItems.map(i => ({
         id: i.menu_item_id || i.id,
@@ -92,11 +90,8 @@ export default function CustomerOrders() {
         category: "Order History",
         available: true
       }));
-      
       localStorage.setItem(`cafeboost:cart:${o.cafe_id}`, JSON.stringify(cart));
-      
-      // 3. Go to menu
-      toast.success(`Items from ${cafe.name} added to cart`);
+      toast.success(`Added items to cart`);
       navigate("/app/menu");
     } catch (e) {
       toast.error("Could not reorder");
@@ -117,18 +112,26 @@ export default function CustomerOrders() {
           </div>
         ) : orders.map(o => {
           const currentIdx = TIMELINE.findIndex(t => t.key === o.status);
-          const idx = currentIdx === -1 && o.status === "delivered" ? 3 : currentIdx;
+          const idx = currentIdx === -1 && (o.status === "delivered" || o.status === "completed" || o.status === "served") ? 4 : currentIdx;
+          const isPaid = o.payment_status === "paid";
           
           return (
-            <Card key={o.id} className="p-4 overflow-hidden">
+            <Card key={o.id} className="p-4 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <p className="text-sm font-bold">Order #{o.id.slice(0, 6).toUpperCase()}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-bold">Order #{o.id.slice(0, 6).toUpperCase()}</p>
+                    {o.table_no && <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded-full font-medium">Table {o.table_no}</span>}
+                  </div>
                   <p className="text-[10px] text-muted-foreground">{new Date(o.created_at).toLocaleString()}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-bold text-accent">₹{Number(o.total_amount).toFixed(2)}</p>
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${o.payment_status === 'paid' ? 'bg-success/10 text-success' : 'bg-amber-500/10 text-amber-600'}`}>{o.payment_status.toUpperCase()}</span>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                    isPaid ? 'bg-success/10 text-success' : (o.status === 'cancelled' ? 'bg-muted text-muted-foreground' : 'bg-amber-500/10 text-amber-600')
+                  }`}>
+                    {o.status === 'cancelled' && !isPaid ? 'UNPAID' : o.payment_status.toUpperCase()}
+                  </span>
                 </div>
               </div>
 
@@ -138,12 +141,11 @@ export default function CustomerOrders() {
                   <div className="flex items-center gap-2 text-destructive font-bold text-xs mb-1">
                     <X className="w-4 h-4" /> Order Cancelled
                   </div>
-                  
-                  {o.payment_status === "paid" && (
+                  {isPaid && (
                     <div className="mt-2 pt-2 border-t border-destructive/10">
                       {o.refund_workflow_status === 'requested' ? (
                         <div className="text-[10px] text-amber-600 font-bold italic animate-pulse flex items-center gap-2">
-                          <RotateCcw className="w-3 h-3" /> Refund pending manager review
+                          <RotateCcw className="w-3 h-3" /> Refund pending review
                         </div>
                       ) : o.refund_workflow_status === 'refunded' ? (
                         <div className="text-[10px] text-success font-bold flex items-center gap-2 uppercase">
@@ -152,7 +154,7 @@ export default function CustomerOrders() {
                       ) : o.refund_workflow_status === 'rejected' ? (
                         <div className="space-y-2">
                           <div className="text-[10px] text-destructive font-bold flex items-center gap-2 uppercase">
-                            <X className="w-3 h-3" /> Refund Request Denied
+                            <X className="w-3 h-3" /> Refund Denied
                           </div>
                           {o.refund_rejection_reason && <p className="text-[10px] text-muted-foreground italic px-2 py-1 bg-white/50 rounded text-center border border-destructive/5">"{o.refund_rejection_reason}"</p>}
                           <Button variant="outline" size="sm" className="w-full h-7 text-[10px]" onClick={() => requestRefund(o.id)}>Request Again</Button>
@@ -201,7 +203,14 @@ export default function CustomerOrders() {
                 {!o.cancellation_requested && o.status !== "cancelled" && (o.status === "placed" || o.status === "accepted") && (
                   <Button variant="outline" size="sm" className="flex-1 text-destructive border-destructive/20 h-8" onClick={() => cancelByCustomer(o.id)}>Cancel</Button>
                 )}
-                <Button variant="outline" size="sm" className="flex-1 h-8" onClick={() => handleReorder(o)}><RotateCcw className="w-3 h-3 mr-1" /> Reorder</Button>
+                {isPaid && (
+                  <Button variant="outline" size="sm" className="flex-1 h-8 gap-2" onClick={() => navigate(`/app/orders/${o.id}/invoice`)}>
+                    <ReceiptText className="w-3 h-3" /> Invoice
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" className="flex-1 h-8 gap-1" onClick={() => handleReorder(o)}>
+                  <RotateCcw className="w-3 h-3" /> Reorder
+                </Button>
               </div>
             </Card>
           );
