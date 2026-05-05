@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChefHat, ClipboardCheck, Loader2, ShoppingBag, Users, X, Smartphone } from "lucide-react";
+import { ChefHat, ClipboardCheck, Loader2, ShoppingBag, Users, X, Smartphone, Banknote, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -13,20 +13,20 @@ import { useStaffCafe } from "@/hooks/useStaffCafe";
 
 type Status = Database["public"]["Enums"]["order_status"];
 type OrderItem = { id: string; name: string; price: number; quantity: number };
-type OrderRow = Database["public"]["Tables"]["orders"]["Row"] & { order_items: OrderItem[] };
+type OrderRow = Database["public"]["Tables"]["orders"]["Row"] & { order_items: OrderItem[]; collector_name?: string | null; payment_method?: string | null };
 
 const SELECT = "*, order_items(id, name, price, quantity)";
 
 /** What each role sees in their queue. */
 const visibleByRole: Record<"chef" | "runner", Status[]> = {
   chef:   ["accepted", "preparing"],
-  runner: ["placed", "ready", "served"],
+  runner: ["placed", "ready"],
 };
 
 function pillClass(status: Status) {
-  if (["completed", "delivered"].includes(status)) return "bg-success/15 text-success";
+  if (status === "completed") return "bg-success/15 text-success";
   if (status === "cancelled") return "bg-destructive/15 text-destructive";
-  if (["ready", "served"].includes(status)) return "bg-accent text-accent-foreground";
+  if (status === "ready") return "bg-accent text-accent-foreground";
   return "bg-accent-soft text-accent-foreground";
 }
 
@@ -53,9 +53,25 @@ export default function StaffDashboard() {
 
     const fetchOrders = async () => {
       const { data } = await supabase.from("orders").select(SELECT).eq("cafe_id", cafe.id)
-        .in("status", ["placed", "accepted", "preparing", "ready", "served"])
+        .not("payment_method", "is", null)
+        .in("status", ["placed", "accepted", "preparing", "ready"])
         .order("created_at", { ascending: false }).limit(150);
-      if (!cancelled) setOrders(((data as OrderRow[] | null) ?? []).map((o) => ({ ...o, order_items: o.order_items ?? [] })));
+      
+      if (!cancelled && data) {
+        // Resolve collector names manually to avoid schema cache join errors
+        const collectorIds = Array.from(new Set(data?.map(o => o.paid_collected_by).filter(Boolean) as string[]));
+        let collectorMap: Record<string, string> = {};
+        if (collectorIds.length > 0) {
+          const { data: profiles } = await supabase.from("profiles").select("user_id, full_name").in("user_id", collectorIds);
+          profiles?.forEach(p => collectorMap[p.user_id] = p.full_name || "Staff");
+        }
+
+        setOrders((data as any[] ?? []).map((o) => ({ 
+          ...o, 
+          order_items: o.order_items ?? [],
+          collector_name: collectorMap[o.paid_collected_by] || null
+        })));
+      }
     };
 
     void fetchOrders().finally(() => { if (!cancelled) setLoading(false); });
@@ -95,19 +111,26 @@ export default function StaffDashboard() {
     <Card key={o.id} className="p-4 space-y-3">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-bold text-accent">#{o.id.slice(0, 6).toUpperCase()}</p>
             <p className="text-sm font-semibold truncate">{o.customer_name}</p>
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground">via {o.source}</span>
             {o.table_no && <span className="text-[10px] bg-muted px-2 py-0.5 rounded-full">Table {o.table_no}</span>}
-            {o.payment_status === "paid" && <span className="text-[10px] bg-success/15 text-success px-2 py-0.5 rounded-full font-semibold">PAID</span>}
-            {o.payment_status === "pending" && <span className="text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full font-semibold">UNPAID</span>}
             <EtaBadge minutes={o.wait_eta_minutes} etaUpdatedAt={o.eta_updated_at} status={o.status} />
           </div>
-          <p className="text-xs text-muted-foreground">{new Date(o.created_at).toLocaleTimeString()} · #{o.id.slice(0, 6)}</p>
-          {o.notes && <p className="text-xs text-muted-foreground mt-1">📝 {o.notes}</p>}
-        </div>
-        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <p className="text-xs text-muted-foreground mt-0.5">{new Date(o.created_at).toLocaleTimeString()}</p>
+          {o.notes && <p className="text-xs text-muted-foreground mt-1 font-medium bg-muted/50 p-1.5 rounded border border-border/50">📝 {o.notes}</p>}
+        <div className="flex flex-col items-end gap-1">
           <p className="text-sm font-bold">₹{Number(o.total_amount).toFixed(2)}</p>
+          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full ${
+            o.payment_status === 'pending' 
+              ? "bg-amber-500 text-white animate-pulse shadow-lg" 
+              : "bg-success/15 text-success"
+          }`}>
+            {o.payment_status === 'paid' ? 'PAID' : (o.payment_method === 'cash' ? 'COLLECT CASH' : 'PAYMENT PENDING')}
+          </span>
+          {o.payment_status === 'paid' && o.payment_method === 'cash' && o.collector_name && (
+            <span className="text-[9px] text-muted-foreground italic">Collected by {o.collector_name}</span>
+          )}
           <span className={`text-xs font-medium px-2 py-1 rounded-full ${pillClass(o.status)}`}>{o.status}</span>
         </div>
       </div>
@@ -143,10 +166,7 @@ export default function StaffDashboard() {
             {o.status === "placed" && (
               <Button variant="hero" size="sm" onClick={() => advance(o, "accepted")}><ClipboardCheck className="w-3 h-3 mr-1" /> Accept &amp; send to kitchen</Button>
             )}
-            {o.status === "ready" && (
-              <Button variant="hero" size="sm" onClick={() => advance(o, "served")}><Users className="w-3 h-3 mr-1" /> Serve</Button>
-            )}
-            {o.status === "served" && o.payment_status !== "paid" && cafe && (
+            {o.payment_status === "pending" && cafe && (
               <PayWithUpiButton
                 orderId={o.id}
                 cafeId={cafe.id}
@@ -155,12 +175,24 @@ export default function StaffDashboard() {
                 customerPhone={o.customer_phone}
                 amount={Number(o.total_amount)}
                 size="sm"
-                runnerMode
-                onPaid={() => advance(o, "completed")}
+                variant="hero"
+                runnerMode={true}
+                label="Collect Payment"
+                onPaid={() => {
+                   // Refresh locally if needed, but the realtime channel will catch it
+                }}
               />
             )}
-            {o.status === "served" && o.payment_status === "paid" && (
-              <Button variant="hero" size="sm" onClick={() => advance(o, "completed")}><ClipboardCheck className="w-3 h-3 mr-1" /> Complete</Button>
+            {o.status === "ready" && (
+              <Button 
+                variant="hero" 
+                size="sm" 
+                onClick={() => advance(o, "completed")}
+                disabled={o.payment_status !== "paid"}
+                title={o.payment_status !== "paid" ? "Collect payment before completing" : ""}
+              >
+                <ClipboardCheck className="w-3 h-3 mr-1" /> Complete
+              </Button>
             )}
           </>
         )}
@@ -174,18 +206,17 @@ export default function StaffDashboard() {
     const key = o.status === "placed" ? "new"
       : o.status === "accepted" ? "accepted"
       : o.status === "preparing" ? "preparing"
-      : o.status === "ready" ? "ready"
-      : "served";
+      : "ready";
     (groups[key] ??= []).push(o);
   }
 
   const labels: Record<string, string> = {
     new: "New orders", accepted: "Sent to kitchen", preparing: "In the kitchen",
-    ready: "Ready for pickup", served: "Awaiting payment",
+    ready: "Ready for runner / Awaiting collection",
   };
   const order = role === "chef"
     ? (["accepted", "preparing"] as const)
-    : (["new", "ready", "served"] as const);
+    : (["new", "ready"] as const);
 
   return (
     <StaffLayout title={title} subtitle={subtitle}>

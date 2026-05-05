@@ -11,7 +11,6 @@ import { NotificationsBell } from "./NotificationsBell";
 
 const nav = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/owner/live", label: "Live Ops", icon: Activity },
   { to: "/owner/orders", label: "Orders", icon: ShoppingBag },
   { to: "/owner/bookings", label: "Bookings", icon: CalendarCheck },
   { to: "/owner/customers", label: "Customers", icon: Users },

@@ -3,18 +3,18 @@ import { useNavigate } from "react-router-dom";
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ClipboardList, Loader2, RotateCcw, Check, ChefHat, PackageCheck, X, Receipt } from "lucide-react";
+import { ClipboardList, Loader2, RotateCcw, Check, ChefHat, PackageCheck, X, Receipt, AlertCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { EtaBadge } from "@/components/EtaBadge";
 import { PayWithUpiButton } from "@/components/PayWithUpiButton";
 
-type Status = "placed"|"accepted"|"preparing"|"ready"|"served"|"completed"|"delivered"|"cancelled";
+type Status = "placed" | "accepted" | "preparing" | "ready" | "completed" | "cancelled";
 type Order = {
   id: string; status: Status; total_amount: number; subtotal: number; tax_amount: number;
   created_at: string; customer_name: string; customer_phone: string | null; cafe_id: string; payment_status: string; source: string;
-  wait_eta_minutes?: number | null; eta_updated_at?: string | null;
+  wait_eta_minutes?: number | null; eta_updated_at?: string | null; cancellation_requested: boolean;
 };
 type OrderItem = { id: string; order_id: string; name: string; price: number; quantity: number; menu_item_id: string | null };
 
@@ -27,7 +27,7 @@ const TIMELINE: { key: Status; label: string; icon: typeof Check }[] = [
 ];
 
 function statusIndex(s: Status) {
-  const order: Status[] = ["placed","accepted","preparing","ready","served","completed"];
+  const order: Status[] = ["placed", "accepted", "preparing", "ready", "completed"];
   return order.indexOf(s);
 }
 
@@ -97,6 +97,17 @@ export default function CustomerOrders() {
     navigate("/app/menu");
   };
 
+  const cancelByCustomer = async (id: string) => {
+    if (!confirm("Request cancellation for this order? Staff will confirm shortly.")) return;
+    const { error } = await supabase.rpc("cancel_order_by_customer", { _order_id: id });
+    if (error) {
+      toast.error(error.message || "Could not request cancellation");
+    } else {
+      toast.success("Cancellation request sent to staff");
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, cancellation_requested: true } : o));
+    }
+  };
+
   if (loading) return <CustomerLayout title="My Orders"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin" /></div></CustomerLayout>;
 
   return (
@@ -128,6 +139,10 @@ export default function CustomerOrders() {
               {cancelled ? (
                 <div className="flex items-center gap-2 text-destructive text-xs font-medium bg-destructive/10 rounded-lg px-3 py-2">
                   <X className="w-3.5 h-3.5" /> Order cancelled
+                </div>
+              ) : o.cancellation_requested ? (
+                <div className="flex items-center gap-2 text-amber-600 text-xs font-medium bg-amber-500/10 rounded-lg px-3 py-2">
+                  <AlertCircle className="w-3.5 h-3.5" /> Cancellation pending staff approval
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-1 mb-3">
@@ -170,6 +185,11 @@ export default function CustomerOrders() {
                 {o.payment_status === "paid" && (
                   <Button variant="ghost" size="sm" onClick={() => navigate(`/app/orders/${o.id}/invoice`)}>
                     <Receipt className="w-3 h-3 mr-1" /> Invoice
+                  </Button>
+                )}
+                {!cancelled && !o.cancellation_requested && (o.status === "placed" || o.status === "accepted") && (
+                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => cancelByCustomer(o.id)}>
+                    <X className="w-3 h-3 mr-1" /> Cancel
                   </Button>
                 )}
                 <Button variant="outline" size="sm" onClick={() => reorder(o)}><RotateCcw className="w-3 h-3 mr-1" /> Reorder</Button>

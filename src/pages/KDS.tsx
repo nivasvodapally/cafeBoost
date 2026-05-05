@@ -159,8 +159,12 @@ export default function KDSPage() {
   };
 
   const groups = useMemo(() => {
-    const g: Record<"accepted"|"preparing"|"ready", KdsOrder[]> = { accepted: [], preparing: [], ready: [] };
-    (board?.orders ?? []).forEach((o) => g[o.status].push(o));
+    const g: Record<"accepted" | "preparing" | "ready", KdsOrder[]> = { accepted: [], preparing: [], ready: [] };
+    (board?.orders ?? []).forEach((o) => {
+      if (o.status in g) {
+        g[o.status as keyof typeof g].push(o);
+      }
+    });
     return g;
   }, [board]);
 

@@ -39,6 +39,7 @@ export function PaymentDialog({
   const [waitingUpi, setWaitingUpi] = useState(false);
   const [mode, setMode] = useState<{ razorpay_mode: "test"|"live"; allow_payment_simulation: boolean } | null>(null);
   const [paid, setPaid] = useState(false);
+  const [cashToken, setCashToken] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -74,9 +75,8 @@ export function PaymentDialog({
       .rpc('set_payment_method', { _order_id: orderId, _method: 'cash' });
     setBusy(false);
     if (error) { toast.error(error.message); return; }
-    toast.success("Order placed! Pay cash at the counter when ready.");
+    setCashToken(true);
     onPaid?.();
-    setTimeout(() => onOpenChange(false), 900);
   };
 
   // For RUNNERS only — confirms cash was physically collected
@@ -142,7 +142,14 @@ export function PaymentDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(v) => {
+      // Prevent closing if we are in the initial selection phase (force choice)
+      if (!v && !paid && !cashToken && !waitingUpi && !runnerMode) {
+        toast.info("Please select a payment method to proceed.");
+        return;
+      }
+      onOpenChange(v);
+    }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -167,6 +174,33 @@ export function PaymentDialog({
           <div className="text-center py-8">
             <CheckCircle2 className="w-14 h-14 text-success mx-auto mb-2" />
             <p className="font-display text-xl font-bold">Payment received</p>
+          </div>
+        ) : cashToken ? (
+          <div className="text-center py-6 space-y-4">
+            <div className="w-20 h-20 bg-accent-soft rounded-full flex items-center justify-center mx-auto mb-2">
+              <Banknote className="w-10 h-10 text-accent" />
+            </div>
+            <div>
+              <p className="font-display text-2xl font-bold">Token: #{orderId.slice(0, 6).toUpperCase()}</p>
+              <p className="text-sm text-muted-foreground mt-2 px-4 italic font-medium">
+                "You can pay to the <b>runners</b> or at the <b>counter</b>."
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-2 px-4">
+                Note: The kitchen will start preparing once staff accepts your order.
+              </p>
+            </div>
+            <div className="bg-muted p-3 rounded-lg text-xs flex items-start gap-2 text-left">
+              <CheckCircle2 className="w-4 h-4 text-success mt-0.5 shrink-0" />
+              <p>You can still pay online anytime from your <b>Orders</b> page if you change your mind.</p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Button variant="hero" className="w-full h-12" onClick={() => { setCashToken(false); setWaitingUpi(false); }}>
+                Pay Online Now
+              </Button>
+              <Button variant="ghost" className="w-full text-muted-foreground" onClick={() => onOpenChange(false)}>
+                Pay cash later (Close)
+              </Button>
+            </div>
           </div>
         ) : waitingUpi ? (
           <div className="text-center py-8 space-y-3">

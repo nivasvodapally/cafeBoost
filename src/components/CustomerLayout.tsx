@@ -1,5 +1,5 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { Home, UtensilsCrossed, Calendar, Gift, ClipboardList, User, LogOut, Coffee, ChevronDown, Sparkles, X } from "lucide-react";
+import { Home, UtensilsCrossed, Calendar, CalendarCheck, Gift, ClipboardList, User, LogOut, Coffee, ChevronDown, Sparkles, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Logo } from "./Logo";
 import { Button } from "./ui/button";
@@ -9,7 +9,7 @@ import { useActiveCafe, setActiveCafe } from "@/lib/cafeContext";
 const nav = [
   { to: "/app", label: "Home", icon: Home, end: true },
   { to: "/app/menu", label: "Menu", icon: UtensilsCrossed },
-  { to: "/app/book", label: "Book", icon: Calendar },
+  { to: "/app/bookings", label: "Bookings", icon: CalendarCheck },
   { to: "/app/rewards", label: "Rewards", icon: Gift },
   { to: "/app/orders", label: "Orders", icon: ClipboardList },
   { to: "/app/profile", label: "Profile", icon: User },

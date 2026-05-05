@@ -17,7 +17,7 @@ export function EtaBadge({
   const base = etaUpdatedAt ? new Date(etaUpdatedAt).getTime() : Date.now();
   const targetMs = base + minutes * 60_000;
   const remainingMin = Math.max(0, Math.round((targetMs - Date.now()) / 60_000));
-  const stale = ["ready", "served", "completed", "cancelled"].includes(status ?? "");
+  const stale = ["ready", "completed", "cancelled"].includes(status ?? "");
   const label = stale
     ? `${minutes} min total`
     : remainingMin === 0

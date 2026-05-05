@@ -141,6 +141,48 @@ export type Database = {
         }
         Relationships: []
       }
+      cash_collections: {
+        Row: {
+          amount: number
+          cafe_id: string
+          collected_at: string
+          id: string
+          order_id: string
+          staff_id: string
+        }
+        Insert: {
+          amount: number
+          cafe_id: string
+          collected_at?: string
+          id?: string
+          order_id: string
+          staff_id: string
+        }
+        Update: {
+          amount?: number
+          cafe_id?: string
+          collected_at?: string
+          id?: string
+          order_id?: string
+          staff_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_collections_cafe_id_fkey"
+            columns: ["cafe_id"]
+            isOneToOne: false
+            referencedRelation: "cafes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_collections_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       cafe_staff_codes: {
         Row: {
           active: boolean
@@ -621,6 +663,7 @@ export type Database = {
           accepted_by: string | null
           assigned_staff_id: string | null
           cafe_id: string
+          cancellation_requested: boolean
           completed_at: string | null
           completed_by: string | null
           created_at: string
@@ -635,6 +678,7 @@ export type Database = {
           invoice_number: string | null
           notes: string | null
           paid_at: string | null
+          paid_collected_by: string | null
           payment_method: string | null
           payment_status: Database["public"]["Enums"]["payment_status"]
           prepared_by: string | null
@@ -1031,11 +1075,16 @@ export type Database = {
         }
         Returns: boolean
       }
+      cancel_order_by_customer: {
+        Args: { _order_id: string }
+        Returns: Json
+      }
       cancel_order_by_staff: { Args: { _order_id: string }; Returns: undefined }
       check_slot_availability: {
         Args: { _cafe_id: string; _date: string; _time: string }
         Returns: Json
       }
+      deny_order_cancellation: { Args: { _order_id: string }; Returns: undefined }
       clock_in: { Args: never; Returns: Json }
       clock_out: { Args: { _notes?: string }; Returns: Json }
       end_break: { Args: never; Returns: Json }
@@ -1162,6 +1211,10 @@ export type Database = {
       set_order_eta: {
         Args: { _minutes: number; _order_id: string }
         Returns: Json
+      }
+      set_payment_method: {
+        Args: { _method: string; _order_id: string }
+        Returns: undefined
       }
       simulate_payment: {
         Args: { _order_id: string; _outcome: string }

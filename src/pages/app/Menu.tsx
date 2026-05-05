@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { placeOrder } from "@/services/orderService";
+import { PaymentDialog } from "@/components/PaymentDialog";
 
 type MenuItem = { id: string; category: string; name: string; description: string | null; price: number; tags: string[] | null; available: boolean };
 type CartItem = MenuItem & { qty: number };
@@ -26,6 +27,7 @@ export default function CustomerMenu() {
   const [activeCat, setActiveCat] = useState<string>("All");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [ordering, setOrdering] = useState(false);
+  const [newOrder, setNewOrder] = useState<{ id: string; total: number } | null>(null);
   // Table number — locked if customer scanned a per-table QR.
   const lockedTable = cafe?.table ?? null;
   const [tableNo, setTableNo] = useState<string>(lockedTable ?? "");
@@ -80,7 +82,7 @@ export default function CustomerMenu() {
       setCart([]);
       try { localStorage.removeItem(CART_KEY(cafe.id)); } catch { /* ignore */ }
       toast.success(`Order placed · ₹${result.totalAmount.toFixed(2)}`);
-      navigate("/app/orders");
+      setNewOrder({ id: result.id, total: result.totalAmount });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not place order");
     } finally {
@@ -206,6 +208,23 @@ export default function CustomerMenu() {
             </div>
           </Card>
         </div>
+      )}
+      {newOrder && (
+        <PaymentDialog
+          open={!!newOrder}
+          onOpenChange={(v) => {
+            if (!v) {
+              setNewOrder(null);
+              navigate("/app/orders");
+            }
+          }}
+          orderId={newOrder.id}
+          cafeId={cafe!.id}
+          cafeName={cafe!.name}
+          amount={newOrder.total}
+          customerName={profile?.full_name ?? user?.email ?? "Guest"}
+          customerPhone={profile?.phone}
+        />
       )}
     </CustomerLayout>
   );
