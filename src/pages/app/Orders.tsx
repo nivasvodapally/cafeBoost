@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, ShoppingBag, Check, X, RotateCcw, AlertCircle, ChefHat, Package, Utensils, ReceiptText, CheckCircle2 } from "lucide-react";
+import { Loader2, ShoppingBag, Check, X, RotateCcw, AlertCircle, ChefHat, Package, Utensils, ReceiptText, CheckCircle2, Smartphone } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { setActiveCafe } from "@/lib/cafeContext";
+import { PaymentDialog } from "@/components/PaymentDialog";
 
 type Order = { 
   id: string; status: string; total_amount: number; subtotal: number; tax_amount: number; created_at: string; customer_name: string; customer_phone: string | null; cafe_id: string; payment_status: string; source: string; table_no: string | null;
@@ -15,6 +16,7 @@ type Order = {
   refund_requested: boolean; refunded_at?: string | null;
   refund_workflow_status?: 'none' | 'requested' | 'refunded' | 'rejected';
   refund_rejection_reason?: string | null;
+  cafe?: { name: string };
 };
 type OrderItem = { id: string; order_id: string; name: string; price: number; quantity: number; menu_item_id: string | null };
 
@@ -31,12 +33,13 @@ export default function CustomerOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [items, setItems] = useState<Record<string, OrderItem[]>>({});
   const [loading, setLoading] = useState(true);
+  const [paymentOrder, setPaymentOrder] = useState<Order | null>(null);
   const navigate = useNavigate();
 
   const fetchAll = async () => {
     if (!user) return;
     const { data } = await supabase.from("orders")
-      .select("*, order_items(*)")
+      .select("*, cafe:cafes(name), order_items(*)")
       .eq("customer_user_id", user.id)
       .order("created_at", { ascending: false }).limit(50);
     
@@ -200,6 +203,11 @@ export default function CustomerOrders() {
 
               {/* Bottom Actions */}
               <div className="flex gap-2">
+                {!isPaid && o.status !== 'cancelled' && (
+                  <Button variant="hero" size="sm" className="flex-1 h-8 gap-2" onClick={() => setPaymentOrder(o)}>
+                    <Smartphone className="w-3 h-3" /> Pay ₹{Number(o.total_amount).toFixed(2)}
+                  </Button>
+                )}
                 {!o.cancellation_requested && o.status !== "cancelled" && (o.status === "placed" || o.status === "accepted") && (
                   <Button variant="outline" size="sm" className="flex-1 text-destructive border-destructive/20 h-8" onClick={() => cancelByCustomer(o.id)}>Cancel</Button>
                 )}
@@ -216,6 +224,23 @@ export default function CustomerOrders() {
           );
         })}
       </div>
+
+      {paymentOrder && (
+        <PaymentDialog
+          open={!!paymentOrder}
+          onOpenChange={(v) => { if (!v) setPaymentOrder(null); }}
+          orderId={paymentOrder.id}
+          cafeId={paymentOrder.cafe_id}
+          cafeName={paymentOrder.cafe?.name}
+          amount={paymentOrder.total_amount}
+          customerName={paymentOrder.customer_name}
+          customerPhone={paymentOrder.customer_phone}
+          onPaid={() => {
+            setPaymentOrder(null);
+            void fetchAll();
+          }}
+        />
+      )}
     </CustomerLayout>
   );
 }
