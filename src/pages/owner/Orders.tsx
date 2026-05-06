@@ -75,7 +75,16 @@ export default function OwnerOrders() {
         const { data: items } = await supabase.from("order_items").select("id, order_id, name, price, quantity").in("order_id", b.orders.map(o => o.id));
         const itemMap: Record<string, OrderItem[]> = {};
         (items ?? []).forEach(i => (itemMap[i.order_id] ||= []).push(i));
-        setOrders(b.orders.map(o => ({ ...o, order_items: itemMap[o.id] || [] } as any)));
+        
+        const localToday = new Date();
+        localToday.setHours(0, 0, 0, 0);
+        const todayStr = localToday.toISOString();
+
+        const filteredOrders = b.orders
+          .filter(o => o.created_at >= todayStr)
+          .map(o => ({ ...o, order_items: itemMap[o.id] || [] } as any));
+          
+        setOrders(filteredOrders);
       } else {
         const { data, error } = await supabase.from("orders").select(SELECT)
           .eq("cafe_id", cafe.id)
@@ -84,8 +93,8 @@ export default function OwnerOrders() {
         if (error) { toast.error(error.message); return; }
         
         const personIds = Array.from(new Set([
-          ...data?.map(o => o.paid_collected_by),
-          ...data?.map(o => o.refunded_by)
+          ...((data as any[])?.map(o => o.paid_collected_by) ?? []),
+          ...((data as any[])?.map(o => o.refunded_by) ?? [])
         ].filter(Boolean) as string[]));
         
         let personMap: Record<string, string> = {};
@@ -108,18 +117,22 @@ export default function OwnerOrders() {
 
   const fetchCounts = useCallback(async () => {
     if (!cafe) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const localToday = new Date();
+    localToday.setHours(0, 0, 0, 0);
+    const today = localToday.toISOString();
+
     const { data } = await supabase
       .from("orders")
-      .select("id, status, payment_method")
-      .eq("cafe_id", cafe.id)
-      .gte("created_at", today)
-      .not("payment_method", "is", null);
+      .select("status, created_at")
+      .eq("cafe_id", cafe.id);
     
     if (data) {
       const c = { live: 0, completed: 0, cancelled: 0 };
       data.forEach(o => {
-        if (["placed", "accepted", "preparing", "ready", "served"].includes(o.status)) c.live++;
+        if (["placed", "accepted", "preparing", "ready", "served"].includes(o.status)) {
+          // Only count live orders if they are from today
+          if (o.created_at >= today) c.live++;
+        }
         else if (o.status === "completed") c.completed++;
         else if (o.status === "cancelled") c.cancelled++;
       });
@@ -159,7 +172,7 @@ export default function OwnerOrders() {
   const handleRefund = async (orderId: string, label: string) => {
     if (!window.confirm(`${label}?`)) return;
     try {
-      const { data, error } = await supabase.rpc('finalize_order_refund', { _order_id: orderId });
+      const { data, error } = await (supabase.rpc as any)('finalize_order_refund', { _order_id: orderId });
       if (error) throw error;
       if (data && !(data as any).success) throw new Error((data as any).error || "Refund failed");
       toast.success("Refund processed successfully");
@@ -172,7 +185,7 @@ export default function OwnerOrders() {
     const reason = window.prompt("Reason for rejecting the refund request?");
     if (reason === null) return;
     try {
-      const { data, error } = await supabase.rpc('deny_refund_request', { _order_id: orderId, _reason: reason });
+      const { data, error } = await (supabase.rpc as any)('deny_refund_request', { _order_id: orderId, _reason: reason });
       if (error) throw error;
       if (data && !(data as any).success) throw new Error((data as any).error || "Failed to reject refund");
       toast.success("Refund request rejected");
