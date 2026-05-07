@@ -2,6 +2,16 @@ import { useEffect, useState } from "react";
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Loader2, ShoppingBag, Check, X, RotateCcw, AlertCircle, ChefHat, Package, Utensils, ReceiptText, CheckCircle2, Smartphone } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,14 +19,15 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { setActiveCafe } from "@/lib/cafeContext";
 import { PaymentDialog } from "@/components/PaymentDialog";
+import type { Database } from "@/integrations/supabase/types";
 
-type Order = { 
-  id: string; status: string; total_amount: number; subtotal: number; tax_amount: number; created_at: string; customer_name: string; customer_phone: string | null; cafe_id: string; payment_status: string; source: string; table_no: string | null;
-  wait_eta_minutes?: number | null; eta_updated_at?: string | null; cancellation_requested: boolean;
-  refund_requested: boolean; refunded_at?: string | null;
+type OrderRow = Database["public"]["Tables"]["orders"]["Row"];
+type Order = OrderRow & {
+  cafe?: { name: string };
+  order_items?: OrderItem[];
+  refund_requested?: boolean;
   refund_workflow_status?: 'none' | 'requested' | 'refunded' | 'rejected';
   refund_rejection_reason?: string | null;
-  cafe?: { name: string };
 };
 type OrderItem = { id: string; order_id: string; name: string; price: number; quantity: number; menu_item_id: string | null };
 
@@ -34,6 +45,8 @@ export default function CustomerOrders() {
   const [items, setItems] = useState<Record<string, OrderItem[]>>({});
   const [loading, setLoading] = useState(true);
   const [paymentOrder, setPaymentOrder] = useState<Order | null>(null);
+  const [cancelDialog, setCancelDialog] = useState<{ open: boolean; orderId: string | null }>({ open: false, orderId: null });
+  const [refundDialog, setRefundDialog] = useState<{ open: boolean; orderId: string | null }>({ open: false, orderId: null });
   const navigate = useNavigate();
 
   const fetchAll = async () => {
@@ -44,9 +57,10 @@ export default function CustomerOrders() {
       .order("created_at", { ascending: false }).limit(50);
     
     if (data) {
-      setOrders(data as any[]);
+      const ordersData = data as unknown as Order[];
+      setOrders(ordersData);
       const map: Record<string, OrderItem[]> = {};
-      data.forEach((o: any) => map[o.id] = o.order_items || []);
+      ordersData.forEach((o) => map[o.id] = o.order_items || []);
       setItems(map);
     }
     setLoading(false);
@@ -64,18 +78,30 @@ export default function CustomerOrders() {
   }, [user]);
 
   const cancelByCustomer = async (id: string) => {
-    if (!confirm("Request cancellation? Staff will review.")) return;
-    const { error } = await supabase.rpc("cancel_order_by_customer", { _order_id: id });
+    setCancelDialog({ open: true, orderId: id });
+  };
+
+  const handleCancelConfirm = async () => {
+    if (!cancelDialog.orderId) return;
+    const { error } = await supabase.rpc("cancel_order_by_customer", { _order_id: cancelDialog.orderId });
     if (error) toast.error(error.message);
     else toast.success("Request sent");
+    setCancelDialog({ open: false, orderId: null });
   };
 
   const requestRefund = async (id: string) => {
-    if (!confirm("Initiate a refund request for this order?")) return;
-    const { data, error } = await supabase.rpc("initiate_refund_request", { _order_id: id });
+    setRefundDialog({ open: true, orderId: id });
+  };
+
+  const handleRefundConfirm = async () => {
+    if (!refundDialog.orderId) return;
+    type RefundResponse = { success?: boolean; error?: string };
+    const { data, error } = await supabase.rpc("initiate_refund_request" as never, { _order_id: refundDialog.orderId });
     if (error) toast.error(error.message);
-    else if (data && !(data as any).success) toast.error((data as any).error);
-    else toast.success("Refund request sent");
+    else if (data && !(data as RefundResponse).success) {
+      toast.error((data as RefundResponse).error || "Unknown error");
+    } else toast.success("Refund request sent");
+    setRefundDialog({ open: false, orderId: null });
   };
 
   const handleReorder = async (o: Order) => {
@@ -241,6 +267,38 @@ export default function CustomerOrders() {
           }}
         />
       )}
+
+      {/* Cancel Order Confirmation Dialog */}
+      <AlertDialog open={cancelDialog.open} onOpenChange={(open) => setCancelDialog({ ...cancelDialog, open })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Request Cancellation</AlertDialogTitle>
+            <AlertDialogDescription>
+              Request cancellation? Staff will review your request before the order is cancelled.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancelConfirm}>Request Cancellation</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Refund Request Confirmation Dialog */}
+      <AlertDialog open={refundDialog.open} onOpenChange={(open) => setRefundDialog({ ...refundDialog, open })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Initiate Refund Request</AlertDialogTitle>
+            <AlertDialogDescription>
+              Initiate a refund request for this order? Staff will review your request.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRefundConfirm}>Request Refund</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </CustomerLayout>
   );
 }

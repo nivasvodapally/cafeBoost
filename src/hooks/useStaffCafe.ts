@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth, type AppRole } from "./useAuth";
 import type { Tables } from "@/integrations/supabase/types";
 
-export type StaffCafe = Pick<Tables<"cafes">, "id" | "slug" | "name" | "currency" | "sound_alerts_enabled">;
+export type StaffCafe = Pick<Tables<"cafes">, "id" | "slug" | "name" | "currency" | "sound_alerts_enabled" | "eta_presets">;
 
 export type StaffAssignment = {
   id: string;
@@ -34,7 +34,7 @@ export function useStaffCafe() {
     if (staff?.cafe_id) {
       const { data: cafeRow } = await supabase
         .from("cafes")
-        .select("id, slug, name, currency, sound_alerts_enabled")
+        .select("id, slug, name, currency, sound_alerts_enabled, eta_presets")
         .eq("id", staff.cafe_id)
         .maybeSingle();
       setCafe(cafeRow ?? null);

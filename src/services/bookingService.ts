@@ -61,45 +61,32 @@ export async function createBooking(input: CreateBookingInput) {
   const ohErr = validateAgainstOpeningHours(input.date, input.time, oh);
   if (ohErr) throw new Error(ohErr);
 
-  // Server-authoritative slot availability check.
-  const { data: avail, error: availErr } = await supabase.rpc("check_slot_availability", {
+  // Use the atomic booking function to prevent race conditions
+  const { data: bookingId, error } = await supabase.rpc("create_booking_atomic", {
     _cafe_id: input.cafeId,
-    _date: input.date,
-    _time: input.time,
+    _customer_user_id: input.customerUserId,
+    _customer_name: input.customerName,
+    _customer_phone: input.customerPhone ?? null,
+    _booking_date: input.date,
+    _booking_time: input.time,
+    _persons: input.persons,
+    _notes: input.notes ?? null
   });
-  if (availErr) throw availErr;
-  const a = avail as { capacity: number; taken: number; remaining: number };
-  if (a.remaining < input.persons) {
-    throw new Error("This time slot is fully booked. Please pick another.");
+
+  if (error) {
+    // Map common error messages to user-friendly ones
+    if (error.message.includes('fully booked')) {
+      throw new Error("This time slot is fully booked. Please pick another.");
+    }
+    if (error.message.includes('already have a booking')) {
+      throw new Error("You already have a booking for this slot.");
+    }
+    if (error.message.includes('Invalid party size')) {
+      throw new Error("Invalid party size");
+    }
+    throw error;
   }
 
-  // Duplicate guard for same customer.
-  const { data: existing } = await supabase
-    .from("bookings")
-    .select("id")
-    .eq("cafe_id", input.cafeId)
-    .eq("booking_date", input.date)
-    .eq("booking_time", input.time)
-    .eq("customer_user_id", input.customerUserId)
-    .neq("status", "cancelled");
-  if ((existing ?? []).length > 0) {
-    throw new Error("You already have a booking for this slot.");
-  }
-
-  const { data, error } = await supabase
-    .from("bookings")
-    .insert({
-      cafe_id: input.cafeId,
-      customer_user_id: input.customerUserId,
-      customer_name: input.customerName,
-      customer_phone: input.customerPhone ?? null,
-      booking_date: input.date,
-      booking_time: input.time,
-      persons: input.persons,
-      notes: input.notes ?? null,
-    })
-    .select("id")
-    .single();
-  if (error) throw error;
-  return data;
+  // Return the booking ID in the same format as before
+  return { id: bookingId };
 }

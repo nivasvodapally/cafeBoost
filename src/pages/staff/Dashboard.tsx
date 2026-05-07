@@ -3,6 +3,16 @@ import { ChefHat, ClipboardCheck, Loader2, ShoppingBag, Users, X, Smartphone, Ba
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { StaffLayout } from "@/components/StaffLayout";
 import { EtaBadge } from "@/components/EtaBadge";
 import { EtaPicker } from "@/components/EtaPicker";
@@ -33,18 +43,11 @@ function pillClass(status: Status) {
 export default function StaffDashboard() {
   const { cafe, assignment, loading: staffLoading } = useStaffCafe();
   const [orders, setOrders] = useState<OrderRow[]>([]);
-  const [presets, setPresets] = useState<number[]>([5, 10, 15, 20, 30]);
   const [loading, setLoading] = useState(true);
+  const [cancelDialog, setCancelDialog] = useState<{ open: boolean; orderId: string | null }>({ open: false, orderId: null });
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const role = (assignment?.role ?? "") as "chef" | "runner" | "";
-
-  useEffect(() => {
-    if (!cafe) return;
-    void (async () => {
-      const { data } = await supabase.from("cafes").select("eta_presets").eq("id", cafe.id).maybeSingle();
-      if (data?.eta_presets?.length) setPresets(data.eta_presets);
-    })();
-  }, [cafe]);
+  const presets = cafe?.eta_presets?.length ? cafe.eta_presets : [5, 10, 15, 20, 30];
 
   useEffect(() => {
     if (!cafe) return;
@@ -60,14 +63,14 @@ export default function StaffDashboard() {
       if (!cancelled && data) {
         // Resolve collector names manually to avoid schema cache join errors
         const collectorIds = Array.from(new Set(data?.map(o => o.paid_collected_by).filter(Boolean) as string[]));
-        let collectorMap: Record<string, string> = {};
+        const collectorMap: Record<string, string> = {};
         if (collectorIds.length > 0) {
           const { data: profiles } = await supabase.from("profiles").select("user_id, full_name").in("user_id", collectorIds);
           profiles?.forEach(p => collectorMap[p.user_id] = p.full_name || "Staff");
         }
 
-        setOrders((data as any[] ?? []).map((o) => ({ 
-          ...o, 
+        setOrders(((data as unknown as OrderRow[]) ?? []).map((o) => ({
+          ...o,
           order_items: o.order_items ?? [],
           collector_name: collectorMap[o.paid_collected_by] || null
         })));
@@ -97,9 +100,14 @@ export default function StaffDashboard() {
     if (error) toast.error(error.message); else toast.success(`Order → ${next}`);
   };
   const cancel = async (id: string) => {
-    if (!confirm("Cancel this order?")) return;
-    const { error } = await supabase.rpc("cancel_order_by_staff", { _order_id: id });
+    setCancelDialog({ open: true, orderId: id });
+  };
+
+  const handleCancelConfirm = async () => {
+    if (!cancelDialog.orderId) return;
+    const { error } = await supabase.rpc("cancel_order_by_staff", { _order_id: cancelDialog.orderId });
     if (error) toast.error(error.message); else toast.success("Order cancelled");
+    setCancelDialog({ open: false, orderId: null });
   };
 
   if (staffLoading || loading) return <StaffLayout title="Orders"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div></StaffLayout>;
@@ -244,6 +252,22 @@ export default function StaffDashboard() {
           })}
         </div>
       )}
+
+      {/* Cancel Order Confirmation Dialog */}
+      <AlertDialog open={cancelDialog.open} onOpenChange={(open) => setCancelDialog({ ...cancelDialog, open })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Order</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cancel this order? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancelConfirm}>Cancel Order</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </StaffLayout>
   );
 }

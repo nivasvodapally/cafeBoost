@@ -7,6 +7,8 @@ import { useAuth, signInAsGuest } from "@/hooks/useAuth";
 import { getActiveCafe, useValidateActiveCafe } from "@/lib/cafeContext";
 
 const SUPPRESS_KEY = "cafeboost:welcome-back-suppress";
+const SESSION_TIMESTAMP_KEY = "cafeboost:guest_session_timestamp";
+const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
  * GuestSessionGuard
@@ -30,6 +32,18 @@ export function GuestSessionGuard() {
 
   useEffect(() => {
     if (loading || user) return;
+    
+    // Check if session has expired
+    const timestamp = sessionStorage.getItem(SESSION_TIMESTAMP_KEY);
+    if (timestamp) {
+      const sessionAge = Date.now() - parseInt(timestamp, 10);
+      if (sessionAge > SESSION_MAX_AGE_MS) {
+        // Session expired, clear suppression
+        sessionStorage.removeItem(SUPPRESS_KEY);
+        sessionStorage.removeItem(SESSION_TIMESTAMP_KEY);
+      }
+    }
+    
     // Don't nag on auth pages or the SaaS landing pages.
     const path = location.pathname;
     if (
@@ -50,12 +64,14 @@ export function GuestSessionGuard() {
     setBusy(false);
     if (!error) {
       sessionStorage.setItem(SUPPRESS_KEY, "1");
+      sessionStorage.setItem(SESSION_TIMESTAMP_KEY, Date.now().toString());
       setOpen(false);
     }
   };
 
   const goSignIn = () => {
     sessionStorage.setItem(SUPPRESS_KEY, "1");
+    sessionStorage.setItem(SESSION_TIMESTAMP_KEY, Date.now().toString());
     setOpen(false);
     navigate("/auth");
   };

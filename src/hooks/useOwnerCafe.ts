@@ -26,7 +26,7 @@ export function useOwnerCafe() {
       .eq("owner_user_id", uid)
       .maybeSingle();
     if (error) {
-      // eslint-disable-next-line no-console
+       
       console.error("[useOwnerCafe]", error);
     }
     setCafe(data ?? null);

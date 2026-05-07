@@ -16,27 +16,19 @@ CREATE POLICY "orders_staff_owner_update" ON public.orders
 
 -- FIX 2: Lock down role assignment — the handle_new_user trigger
 -- currently trusts the 'role' field from client metadata.
--- We override it: only the /for-cafes/auth page sends role=owner,
--- but as a server-side guardrail we restrict valid roles from signup
--- to 'customer' only. Owners get the 'owner' role assigned ONLY after
--- email verification via the owner-specific trigger below.
+-- We override it: ALL new users are assigned 'customer' role by default.
+-- Owner role can only be assigned through a secure server-side process
+-- (e.g., after email verification and cafe onboarding RPC).
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER LANGUAGE PLPGSQL SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   _role public.app_role;
-  _is_owner_signup boolean;
 BEGIN
-  -- Only accept 'owner' from metadata if the signup came via the owner portal
-  -- We detect this by checking if the email_confirm_sent_at is null (immediate session)
-  -- combined with the role claim. Since we can't verify origin server-side from the trigger,
-  -- we accept it but add a note that owners still must go through email verification and 
-  -- the onboarding flow gated by is_cafe_owner checks.
-  -- The real guard is: owners can't access any owner data without a cafe record
-  -- where owner_user_id = auth.uid(), which is created during the onboarding RPC.
-  _role := CASE
-    WHEN (NEW.raw_user_meta_data->>'role') = 'owner' THEN 'owner'::public.app_role
-    ELSE 'customer'::public.app_role
-  END;
+  -- SECURITY FIX: Always assign 'customer' role regardless of metadata.
+  -- This prevents clients from claiming 'owner' role via signup metadata.
+  -- Owners must be assigned through a separate secure process (e.g.,
+  -- after email verification and successful cafe onboarding).
+  _role := 'customer'::public.app_role;
 
   INSERT INTO public.profiles (user_id, role, full_name, email, phone, birthday, is_guest)
   VALUES (

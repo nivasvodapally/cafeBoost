@@ -46,7 +46,14 @@ const CustomerInvoice = lazy(() => import("./pages/app/Invoice"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } },
+  defaultOptions: {
+    queries: {
+      staleTime: 300_000, // Increased from 120s to 300s (5 minutes) for better performance
+      gcTime: 600_000, // 10 minutes cache time (default is 5 minutes, increased for better cache)
+      refetchOnWindowFocus: false,
+      retry: 1,
+    }
+  },
 });
 
 const App = () => (

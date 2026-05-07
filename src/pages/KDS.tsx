@@ -105,6 +105,7 @@ function PairingScreen({ onPaired }: { onPaired: (token: string, label: string |
 export default function KDSPage() {
   const [token, setToken] = useState<string | null>(() => kdsDevice.getToken());
   const [board, setBoard] = useState<KdsBoard | null>(null);
+  const [cafeId, setCafeId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showEta, setShowEta] = useState<string | null>(null);
@@ -117,24 +118,44 @@ export default function KDSPage() {
     const { data, error } = await supabase.rpc("kds_get_orders", { _token: tok });
     if (error) {
       if (/Invalid KDS device/i.test(error.message)) {
-        kdsDevice.clear(); setToken(null); toast.error("Device unpaired — please pair again");
+        kdsDevice.clear(); setToken(null); setCafeId(null); toast.error("Device unpaired — please pair again");
       } else {
         toast.error(error.message);
       }
       return;
     }
-    setBoard(data as KdsBoard | null);
+    const boardData = data as KdsBoard | null;
+    setBoard(boardData);
+    // Extract cafe_id from board data for filtered subscriptions
+    if (boardData?.cafe?.id) {
+      setCafeId(boardData.cafe.id);
+    } else {
+      setCafeId(null);
+    }
   }, []);
 
+  // Effect 1: Initial fetch when token changes
   useEffect(() => {
-    if (!token) { setLoading(false); return; }
+    if (!token) { setLoading(false); setCafeId(null); return; }
     setLoading(true);
     void fetchBoard(token).finally(() => setLoading(false));
+  }, [token, fetchBoard]);
 
-    // Realtime — subscribe to all orders changes; the RPC re-filters by device cafe.
+  // Effect 2: Set up realtime subscription and polling when cafeId is available
+  useEffect(() => {
+    if (!token || !cafeId) return;
+
+    // Clean up any existing subscription
     if (channelRef.current) void supabase.removeChannel(channelRef.current);
+    
+    // Create filtered subscription for orders in this specific cafe only
     const ch = supabase.channel(`kds:${token.slice(0, 8)}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => void fetchBoard(token))
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "orders",
+        filter: `cafe_id=eq.${cafeId}`  // CRITICAL: Filter by cafe_id to avoid unnecessary notifications
+      }, () => void fetchBoard(token))
       .subscribe();
     channelRef.current = ch;
 
@@ -142,11 +163,12 @@ export default function KDSPage() {
     tickRef.current = window.setInterval(() => {
       void fetchBoard(token);
     }, 15_000);
+
     return () => {
       if (tickRef.current) clearInterval(tickRef.current);
       if (channelRef.current) void supabase.removeChannel(channelRef.current);
     };
-  }, [token, fetchBoard]);
+  }, [token, cafeId, fetchBoard]);
 
   const act = async (orderId: string, action: "prepare"|"ready"|"set_eta", etaMinutes?: number) => {
     if (!token) return;
@@ -171,7 +193,7 @@ export default function KDSPage() {
   if (!token) return <PairingScreen onPaired={(t, l) => { kdsDevice.save(t, l); setToken(t); }} />;
   if (loading) return <div className="min-h-screen grid place-items-center bg-background"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>;
 
-  const unpair = () => { if (!confirm("Unpair this device?")) return; kdsDevice.clear(); setToken(null); setBoard(null); };
+  const unpair = () => { if (!confirm("Unpair this device?")) return; kdsDevice.clear(); setToken(null); setBoard(null); setCafeId(null); };
   const presets = board?.cafe.eta_presets ?? [5, 10, 15, 20, 30];
 
   const renderOrder = (o: KdsOrder) => {

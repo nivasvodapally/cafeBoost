@@ -38,7 +38,7 @@ export default function CustomerBookings() {
       if (error) {
         console.error("Error fetching bookings:", error);
       } else {
-        setBookings(data as any[]);
+        setBookings(data as unknown as Booking[]);
       }
       setLoading(false);
     };
