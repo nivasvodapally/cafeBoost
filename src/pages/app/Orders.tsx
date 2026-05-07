@@ -12,13 +12,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, ShoppingBag, Check, X, RotateCcw, AlertCircle, ChefHat, Package, Utensils, ReceiptText, CheckCircle2, Smartphone } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Loader2, ShoppingBag, Check, X, RotateCcw, AlertCircle, ChefHat, Package, Utensils, ReceiptText, CheckCircle2, Smartphone, Star, Edit, Split, Clock, Zap, Crown, Plus, Minus, Info } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { setActiveCafe } from "@/lib/cafeContext";
 import { PaymentDialog } from "@/components/PaymentDialog";
+import { OrderModificationService } from "@/services/orderModificationService";
+import { SplitBillService } from "@/services/splitBillService";
 import type { Database } from "@/integrations/supabase/types";
 
 type OrderRow = Database["public"]["Tables"]["orders"]["Row"];
@@ -28,6 +34,14 @@ type Order = OrderRow & {
   refund_requested?: boolean;
   refund_workflow_status?: 'none' | 'requested' | 'refunded' | 'rejected';
   refund_rejection_reason?: string | null;
+  priority?: 'low' | 'normal' | 'high' | 'vip';
+  original_order_id?: string | null;
+  modification_reason?: string | null;
+  modified_by?: string | null;
+  modified_at?: string | null;
+  split_parent_id?: string | null;
+  split_sequence?: number | null;
+  split_total_count?: number | null;
 };
 type OrderItem = { id: string; order_id: string; name: string; price: number; quantity: number; menu_item_id: string | null };
 
@@ -39,6 +53,22 @@ const TIMELINE = [
   { key: "completed", label: "Done", icon: Utensils },
 ];
 
+// Helper function to get priority badge styling
+const getPriorityBadge = (priority: Order['priority']) => {
+  switch (priority) {
+    case 'low':
+      return { bg: 'bg-gray-100', text: 'text-gray-700', icon: Clock, label: 'Low' };
+    case 'normal':
+      return { bg: 'bg-blue-100', text: 'text-blue-700', icon: Star, label: 'Normal' };
+    case 'high':
+      return { bg: 'bg-amber-100', text: 'text-amber-700', icon: Zap, label: 'High' };
+    case 'vip':
+      return { bg: 'bg-purple-100', text: 'text-purple-700', icon: Crown, label: 'VIP' };
+    default:
+      return { bg: 'bg-blue-100', text: 'text-blue-700', icon: Star, label: 'Normal' };
+  }
+};
+
 export default function CustomerOrders() {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -47,6 +77,14 @@ export default function CustomerOrders() {
   const [paymentOrder, setPaymentOrder] = useState<Order | null>(null);
   const [cancelDialog, setCancelDialog] = useState<{ open: boolean; orderId: string | null }>({ open: false, orderId: null });
   const [refundDialog, setRefundDialog] = useState<{ open: boolean; orderId: string | null }>({ open: false, orderId: null });
+  const [modifyDialog, setModifyDialog] = useState<{ open: boolean; order: Order | null }>({ open: false, order: null });
+  const [splitDialog, setSplitDialog] = useState<{ open: boolean; order: Order | null }>({ open: false, order: null });
+  const [modificationReason, setModificationReason] = useState('');
+  const [splitType, setSplitType] = useState<'equal' | 'custom'>('equal');
+  const [splitCount, setSplitCount] = useState(2);
+  const [customSplits, setCustomSplits] = useState<Record<string, number>>({});
+  const [modificationLoading, setModificationLoading] = useState(false);
+  const [splitLoading, setSplitLoading] = useState(false);
   const navigate = useNavigate();
 
   const fetchAll = async () => {
@@ -129,6 +167,130 @@ export default function CustomerOrders() {
     }
   };
 
+  const handleModifyOrder = async (o: Order) => {
+    try {
+      // Check if order can be modified
+      const canModify = await OrderModificationService.canModifyOrder(o.id);
+      if (!canModify.canModify) {
+        toast.error(canModify.reason || "This order cannot be modified at this time.");
+        return;
+      }
+      
+      setModifyDialog({ open: true, order: o });
+      setModificationReason('');
+    } catch (error) {
+      console.error('Error checking modification:', error);
+      toast.error("Unable to check if order can be modified. Please try again.");
+    }
+  };
+
+  const handleSplitOrder = async (o: Order) => {
+    try {
+      // Check if order can be split (has multiple items)
+      const orderItems = items[o.id] || [];
+      if (orderItems.length <= 1) {
+        toast.error("Order must have at least 2 items to split.");
+        return;
+      }
+      
+      setSplitDialog({ open: true, order: o });
+      setSplitType('equal');
+      setSplitCount(2);
+      setCustomSplits({});
+    } catch (error) {
+      console.error('Error preparing split:', error);
+      toast.error("Unable to prepare order split. Please try again.");
+    }
+  };
+
+  const handleModifySubmit = async () => {
+    if (!modifyDialog.order || !modificationReason.trim()) {
+      toast.error("Please provide a reason for modification.");
+      return;
+    }
+
+    setModificationLoading(true);
+    try {
+      const result = await OrderModificationService.modifyOrder({
+        orderId: modifyDialog.order.id,
+        reason: modificationReason.trim(),
+        userId: user?.id || ''
+      });
+
+      if (result.success) {
+        toast.success("Order modification request submitted successfully!");
+        setModifyDialog({ open: false, order: null });
+        setModificationReason('');
+        void fetchAll(); // Refresh orders
+      } else {
+        toast.error(result.error || "Failed to submit modification request.");
+      }
+    } catch (error) {
+      console.error('Error modifying order:', error);
+      toast.error("An error occurred while modifying the order.");
+    } finally {
+      setModificationLoading(false);
+    }
+  };
+
+  const handleSplitSubmit = async () => {
+    if (!splitDialog.order) {
+      toast.error("No order selected for splitting.");
+      return;
+    }
+
+    setSplitLoading(true);
+    try {
+      const orderItems = items[splitDialog.order.id] || [];
+      const totalAmount = splitDialog.order.total_amount;
+      
+      let splits;
+      if (splitType === 'equal') {
+        // Calculate equal split amounts
+        const splitAmount = Math.floor(totalAmount / splitCount);
+        splits = Array.from({ length: splitCount }, (_, i) => ({
+          name: `Split ${i + 1}`,
+          amount: i === splitCount - 1 ? totalAmount - (splitAmount * (splitCount - 1)) : splitAmount
+        }));
+      } else {
+        // Use custom splits
+        const totalCustom = Object.values(customSplits).reduce((sum, amount) => sum + amount, 0);
+        if (Math.abs(totalCustom - totalAmount) > 1) { // Allow 1 cent rounding difference
+          toast.error(`Custom split amounts (${totalCustom}) must equal order total (${totalAmount}).`);
+          setSplitLoading(false);
+          return;
+        }
+        splits = Object.entries(customSplits).map(([name, amount]) => ({
+          name,
+          amount
+        }));
+      }
+
+      const result = await OrderModificationService.splitOrder({
+        orderId: splitDialog.order.id,
+        splits: splits.map((split, index) => ({
+          name: split.name,
+          amount: split.amount,
+          sequence: index + 1
+        })),
+        userId: user?.id || ''
+      });
+
+      if (result.success) {
+        toast.success(`Order split into ${splits.length} parts successfully!`);
+        setSplitDialog({ open: false, order: null });
+        void fetchAll(); // Refresh orders
+      } else {
+        toast.error(result.error || "Failed to split order.");
+      }
+    } catch (error) {
+      console.error('Error splitting order:', error);
+      toast.error("An error occurred while splitting the order.");
+    } finally {
+      setSplitLoading(false);
+    }
+  };
+
   if (loading) return <CustomerLayout title="My Orders"><div className="grid place-items-center h-64"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div></CustomerLayout>;
 
   return (
@@ -151,8 +313,37 @@ export default function CustomerOrders() {
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-bold">Order #{o.id.slice(0, 6).toUpperCase()}</p>
                     {o.table_no && <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded-full font-medium">Table {o.table_no}</span>}
+                    {/* Priority Badge */}
+                    {o.priority && o.priority !== 'normal' && (
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium flex items-center gap-1 ${getPriorityBadge(o.priority).bg} ${getPriorityBadge(o.priority).text}`}>
+                        {(() => {
+                          const Icon = getPriorityBadge(o.priority).icon;
+                          return <Icon className="w-3 h-3" />;
+                        })()}
+                        {getPriorityBadge(o.priority).label}
+                      </span>
+                    )}
+                    {/* Modification Indicator */}
+                    {o.original_order_id && (
+                      <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium flex items-center gap-1">
+                        <Edit className="w-3 h-3" /> Modified
+                      </span>
+                    )}
+                    {/* Split Order Indicator */}
+                    {o.split_parent_id && (
+                      <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium flex items-center gap-1">
+                        <Split className="w-3 h-3" /> Split
+                      </span>
+                    )}
                   </div>
                   <p className="text-[10px] text-muted-foreground">{new Date(o.created_at).toLocaleString()}</p>
+                  {/* Modification details */}
+                  {o.modification_reason && (
+                    <p className="text-[10px] text-blue-600 mt-1 italic">"{o.modification_reason}"</p>
+                  )}
+                  {o.split_total_count && o.split_total_count > 1 && (
+                    <p className="text-[10px] text-green-600 mt-1">Part {o.split_sequence} of {o.split_total_count}</p>
+                  )}
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-bold text-accent">₹{Number(o.total_amount).toFixed(2)}</p>
@@ -237,6 +428,18 @@ export default function CustomerOrders() {
                 {!o.cancellation_requested && o.status !== "cancelled" && (o.status === "placed" || o.status === "accepted") && (
                   <Button variant="outline" size="sm" className="flex-1 text-destructive border-destructive/20 h-8" onClick={() => cancelByCustomer(o.id)}>Cancel</Button>
                 )}
+                {/* Order Modification Button - only for recent orders */}
+                {!o.original_order_id && (o.status === "placed" || o.status === "accepted") && (
+                  <Button variant="outline" size="sm" className="flex-1 h-8 gap-1" onClick={() => handleModifyOrder(o)}>
+                    <Edit className="w-3 h-3" /> Modify
+                  </Button>
+                )}
+                {/* Order Split Button - only for orders with multiple items */}
+                {!o.split_parent_id && (o.status === "placed" || o.status === "accepted") && (items[o.id]?.length || 0) > 1 && (
+                  <Button variant="outline" size="sm" className="flex-1 h-8 gap-1" onClick={() => handleSplitOrder(o)}>
+                    <Split className="w-3 h-3" /> Split
+                  </Button>
+                )}
                 {isPaid && (
                   <Button variant="outline" size="sm" className="flex-1 h-8 gap-2" onClick={() => navigate(`/app/orders/${o.id}/invoice`)}>
                     <ReceiptText className="w-3 h-3" /> Invoice
@@ -299,6 +502,194 @@ export default function CustomerOrders() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+ 
+      {/* Order Modification Dialog */}
+      <Dialog open={modifyDialog.open} onOpenChange={(open) => setModifyDialog({ ...modifyDialog, open })}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Modify Order</DialogTitle>
+            <DialogDescription>
+              Request changes to your order #{modifyDialog.order?.id.slice(0, 6).toUpperCase()}. Staff will review your request.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="modification-reason">Reason for modification</Label>
+              <Textarea
+                id="modification-reason"
+                placeholder="Please explain what changes you'd like to make (e.g., add extra cheese, remove onions, change item size)"
+                value={modificationReason}
+                onChange={(e) => setModificationReason(e.target.value)}
+                className="min-h-[100px]"
+              />
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p className="text-xs text-amber-800 font-medium flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                Note: Modifications are subject to staff approval and may affect the total amount.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModifyDialog({ open: false, order: null })} disabled={modificationLoading}>
+              Cancel
+            </Button>
+            <Button onClick={handleModifySubmit} disabled={modificationLoading || !modificationReason.trim()}>
+              {modificationLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                'Submit Modification Request'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+ 
+      {/* Order Split Dialog */}
+      <Dialog open={splitDialog.open} onOpenChange={(open) => setSplitDialog({ ...splitDialog, open })}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Split Order</DialogTitle>
+            <DialogDescription>
+              Split order #{splitDialog.order?.id.slice(0, 6).toUpperCase()} into multiple parts for separate payment.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Split Type</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={splitType === 'equal' ? 'default' : 'outline'}
+                  className="flex-1"
+                  onClick={() => setSplitType('equal')}
+                >
+                  Equal Split
+                </Button>
+                <Button
+                  type="button"
+                  variant={splitType === 'custom' ? 'default' : 'outline'}
+                  className="flex-1"
+                  onClick={() => setSplitType('custom')}
+                >
+                  Custom Split
+                </Button>
+              </div>
+            </div>
+ 
+            {splitType === 'equal' ? (
+              <div className="space-y-2">
+                <Label htmlFor="split-count">Number of splits</Label>
+                <div className="flex items-center gap-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setSplitCount(Math.max(2, splitCount - 1))}
+                    disabled={splitCount <= 2}
+                  >
+                    <Minus className="w-4 h-4" />
+                  </Button>
+                  <div className="text-center flex-1">
+                    <span className="text-2xl font-bold">{splitCount}</span>
+                    <p className="text-xs text-muted-foreground">parts</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setSplitCount(Math.min(10, splitCount + 1))}
+                    disabled={splitCount >= 10}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Each part: ₹{splitDialog.order ? (splitDialog.order.total_amount / splitCount).toFixed(2) : '0.00'}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>Custom Split Amounts</Label>
+                <div className="space-y-2">
+                  {splitDialog.order && (
+                    <>
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Split 1</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">₹</span>
+                          <Input
+                            type="number"
+                            className="w-24"
+                            value={customSplits['Split 1'] || ''}
+                            onChange={(e) => setCustomSplits({ ...customSplits, 'Split 1': Number(e.target.value) })}
+                            placeholder="Amount"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Split 2</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-muted-foreground">₹</span>
+                          <Input
+                            type="number"
+                            className="w-24"
+                            value={customSplits['Split 2'] || ''}
+                            onChange={(e) => setCustomSplits({ ...customSplits, 'Split 2': Number(e.target.value) })}
+                            placeholder="Amount"
+                          />
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => {
+                          const nextSplit = Object.keys(customSplits).length + 1;
+                          setCustomSplits({ ...customSplits, [`Split ${nextSplit}`]: 0 });
+                        }}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Another Split
+                      </Button>
+                    </>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Total: ₹{Object.values(customSplits).reduce((sum, amount) => sum + amount, 0).toFixed(2)} /
+                  Order Total: ₹{splitDialog.order?.total_amount.toFixed(2) || '0.00'}
+                </p>
+              </div>
+            )}
+ 
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p className="text-xs text-blue-800 font-medium flex items-center gap-2">
+                <Info className="w-4 h-4" />
+                Each split will create a separate order for payment. Staff will be notified.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSplitDialog({ open: false, order: null })} disabled={splitLoading}>
+              Cancel
+            </Button>
+            <Button onClick={handleSplitSubmit} disabled={splitLoading}>
+              {splitLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Splitting...
+                </>
+              ) : (
+                'Split Order'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </CustomerLayout>
   );
-}
+ }

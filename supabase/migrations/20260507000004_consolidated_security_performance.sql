@@ -29,33 +29,37 @@ END;
 $$;
 
 -- Create cafes_public view to hide sensitive columns
-CREATE OR REPLACE VIEW public.cafes_public AS
-SELECT 
+-- Updated to only include columns that actually exist in cafes table
+DROP VIEW IF EXISTS public.cafes_public CASCADE;
+CREATE VIEW public.cafes_public AS
+SELECT
   id,
   name,
   slug,
   description,
   logo_url,
-  cover_url,
+  banner_url,
   address,
   city,
   state,
   country,
-  postal_code,
-  latitude,
-  longitude,
   currency,
   timezone,
   opening_hours,
-  is_active,
+  seating_capacity,
+  slot_capacity,
+  accept_online_orders,
+  accept_reservations,
+  table_ordering_enabled,
+  loyalty_enabled,
+  sound_alerts_enabled,
   created_at,
-  updated_at,
   -- Excluded sensitive columns:
-  -- stripe_account_id, razorpay_account_id, tax_rate, 
-  -- owner_user_id, subscription_tier, subscription_status
+  -- razorpay_key_id, razorpay_key_secret, razorpay_mode,
+  -- owner_user_id, tax_rate, points_per_currency,
+  -- kds_pairing_code, kds_pin_hash, gstin, email, phone
   '***' AS sensitive_data_redacted
-FROM public.cafes
-WHERE is_active = true;
+FROM public.cafes;
 
 -- Grant access to the view
 GRANT SELECT ON public.cafes_public TO authenticated, anon;
@@ -261,9 +265,9 @@ ADD CONSTRAINT valid_payment_status
 CHECK (payment_status IN ('pending', 'paid', 'refunded', 'failed'));
 
 -- Add check constraint for booking status
-ALTER TABLE public.bookings 
-ADD CONSTRAINT valid_booking_status 
-CHECK (status IN ('pending', 'confirmed', 'cancelled', 'no_show'));
+ALTER TABLE public.bookings
+ADD CONSTRAINT valid_booking_status
+CHECK (status IN ('pending', 'confirmed', 'checked_in', 'cancelled', 'no_show', 'completed'));
 
 -- Add check constraint for positive quantities
 ALTER TABLE public.order_items 
@@ -300,9 +304,9 @@ ALTER TABLE public.cafe_staff ENABLE ROW LEVEL SECURITY;
 -- In a real consolidation, you would identify and remove duplicates
 
 COMMENT ON FUNCTION public.handle_new_user() IS 'Updated to always assign customer role for security';
-COMMENT ON FUNCTION public.create_booking_atomic() IS 'Atomic booking creation with row-level locking to prevent race conditions';
-COMMENT ON FUNCTION public.check_order_rate_limit() IS 'Rate limiting for order placement (5 orders per minute per user per cafe)';
-COMMENT ON FUNCTION public.place_order() IS 'Updated with rate limiting and security checks';
+COMMENT ON FUNCTION public.create_booking_atomic(uuid, uuid, text, text, date, time, integer, text) IS 'Atomic booking creation with row-level locking to prevent race conditions';
+COMMENT ON FUNCTION public.check_order_rate_limit(uuid, uuid) IS 'Rate limiting for order placement (5 orders per minute per user per cafe)';
+COMMENT ON FUNCTION public.place_order(uuid, jsonb, text, text, text) IS 'Updated with rate limiting and security checks';
 
 -------------------------------
 -- 8. AUDIT LOGGING (Optional enhancement)
@@ -366,7 +370,7 @@ GRANT SELECT ON public.security_audit_log TO postgres, service_role;
 -- 9. FINAL COMMENTS & DOCUMENTATION
 -------------------------------
 
-COMMENT ON TABLE public.cafes_public IS 'Public view of cafes with sensitive columns redacted for security';
+COMMENT ON VIEW public.cafes_public IS 'Public view of cafes with sensitive columns redacted for security';
 COMMENT ON INDEX idx_orders_cafe_status_created IS 'Optimizes queries filtering orders by cafe and status with recent first';
 COMMENT ON INDEX idx_orders_user_cafe_created IS 'Optimizes rate limiting checks and user order history queries';
 

@@ -4,11 +4,12 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, CalendarCheck, AlertCircle } from "lucide-react";
+import { Loader2, CalendarCheck, AlertCircle, Clock, Users } from "lucide-react";
 import { useActiveCafe } from "@/lib/cafeContext";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { createBooking, validateAgainstOpeningHours } from "@/services/bookingService";
+import { WaitlistService } from "@/services/waitlistService";
 import { supabase } from "@/integrations/supabase/client";
 
 const TIMES = ["08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00"];
@@ -21,10 +22,12 @@ export default function CustomerBook() {
   const [time, setTime] = useState("19:00");
   const [persons, setPersons] = useState(2);
   const [notes, setNotes] = useState("");
+  const [specialRequests, setSpecialRequests] = useState("");
   const [name, setName] = useState(profile?.full_name ?? "");
   const [phone, setPhone] = useState(profile?.phone ?? "");
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
+  const [bookingType, setBookingType] = useState<"confirmed" | "waitlist">("confirmed");
   const [openingHours, setOpeningHours] = useState<Record<string, { open: string; close: string; closed?: boolean }> | null>(null);
   const [slotInfo, setSlotInfo] = useState<{ remaining: number; capacity: number } | null>(null);
   const [inlineError, setInlineError] = useState<string | null>(null);
@@ -57,17 +60,34 @@ export default function CustomerBook() {
     const customerName = (name || profile?.full_name || user.email || "Customer").trim();
     setSaving(true);
     try {
-      await createBooking({
-        cafeId: cafe.id,
-        customerUserId: user.id,
-        customerName,
-        customerPhone: (phone || profile?.phone || "").trim() || null,
-        date, time, persons,
-        notes: notes.trim() || null,
-      });
+      if (bookingType === "confirmed") {
+        await createBooking({
+          cafeId: cafe.id,
+          customerUserId: user.id,
+          customerName,
+          customerPhone: (phone || profile?.phone || "").trim() || null,
+          date, time, persons,
+          notes: notes.trim() || null,
+        });
+        toast.success("Booking requested!");
+      } else {
+        // Join waitlist
+        const bookingId = await WaitlistService.joinWaitlist({
+          cafeId: cafe.id,
+          customerUserId: user.id,
+          customerName,
+          customerPhone: (phone || profile?.phone || "").trim() || null,
+          bookingDate: date,
+          bookingTime: time,
+          persons,
+          notes: notes.trim() || null,
+          specialRequests: specialRequests.trim() || null,
+        });
+        toast.success("Added to waitlist! You'll be notified when a table becomes available.");
+      }
       setDone(true);
       setNotes("");
-      toast.success("Booking requested!");
+      setSpecialRequests("");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not book");
     } finally {
@@ -76,12 +96,23 @@ export default function CustomerBook() {
   };
 
   if (done) {
+    const isWaitlist = bookingType === "waitlist";
     return (
       <CustomerLayout title="Book a table" subtitle={cafe?.name}>
         <Card className="p-8 text-center">
-          <CalendarCheck className="w-12 h-12 text-success mx-auto mb-4" />
-          <p className="font-display text-2xl font-bold">Booking received!</p>
-          <p className="text-sm text-muted-foreground mt-2">{cafe?.name} will confirm shortly.</p>
+          {isWaitlist ? (
+            <Clock className="w-12 h-12 text-warning mx-auto mb-4" />
+          ) : (
+            <CalendarCheck className="w-12 h-12 text-success mx-auto mb-4" />
+          )}
+          <p className="font-display text-2xl font-bold">
+            {isWaitlist ? "Added to Waitlist!" : "Booking received!"}
+          </p>
+          <p className="text-sm text-muted-foreground mt-2">
+            {isWaitlist
+              ? "You'll be notified when a table becomes available. Check your bookings page for updates."
+              : `${cafe?.name} will confirm shortly.`}
+          </p>
           <div className="flex gap-2 justify-center mt-6">
             <Button variant="outline" onClick={() => setDone(false)}>New booking</Button>
           </div>
@@ -111,25 +142,83 @@ export default function CustomerBook() {
             </div>
           </div>
           <div className="space-y-2"><Label>Number of people *</Label><Input type="number" min={1} max={50} value={persons} onChange={e => setPersons(parseInt(e.target.value) || 1)} required /></div>
-          <div className="space-y-2"><Label>Notes</Label><Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Special requests…" maxLength={500} /></div>
+          <div className="space-y-2">
+            <Label>Notes</Label>
+            <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="General notes…" maxLength={500} />
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Special Requests (for waitlist)</Label>
+            <Input value={specialRequests} onChange={e => setSpecialRequests(e.target.value)} placeholder="Any special requirements, allergies, etc." maxLength={500} />
+          </div>
+
+          {/* Booking type selection */}
+          <div className="space-y-3">
+            <Label>Booking Type</Label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={bookingType === "confirmed" ? "default" : "outline"}
+                className="flex-1"
+                onClick={() => setBookingType("confirmed")}
+              >
+                <CalendarCheck className="w-4 h-4 mr-2" />
+                Regular Booking
+              </Button>
+              <Button
+                type="button"
+                variant={bookingType === "waitlist" ? "default" : "outline"}
+                className="flex-1"
+                onClick={() => setBookingType("waitlist")}
+              >
+                <Clock className="w-4 h-4 mr-2" />
+                Join Waitlist
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {bookingType === "confirmed"
+                ? "Book immediately if seats are available."
+                : "Join waitlist if no seats available. You'll be notified when a table opens."}
+            </p>
+          </div>
 
           {inlineError && (
             <div className="flex items-start gap-2 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" /> {inlineError}
             </div>
           )}
+          
           {!inlineError && slotFull && (
-            <div className="flex items-start gap-2 text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">
+            <div className="flex items-start gap-2 text-sm text-warning bg-warning/10 rounded-lg px-3 py-2">
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-              Only {slotInfo!.remaining} seats left at this time. Please pick another slot or reduce party size.
+              Only {slotInfo!.remaining} seats left at this time.
+              {bookingType === "confirmed"
+                ? " Please pick another slot or reduce party size."
+                : " You can still join the waitlist."}
             </div>
           )}
+          
           {!blocked && slotInfo && (
-            <p className="text-xs text-muted-foreground">{slotInfo.remaining} of {slotInfo.capacity} seats available at this time.</p>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Users className="w-4 h-4" />
+              <span>{slotInfo.remaining} of {slotInfo.capacity} seats available at this time.</span>
+            </div>
           )}
 
-          <Button type="submit" variant="hero" size="lg" className="w-full" disabled={saving || blocked}>
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Request booking"}
+          <Button
+            type="submit"
+            variant="hero"
+            size="lg"
+            className="w-full"
+            disabled={saving || (bookingType === "confirmed" && blocked)}
+          >
+            {saving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : bookingType === "confirmed" ? (
+              "Request Booking"
+            ) : (
+              "Join Waitlist"
+            )}
           </Button>
         </form>
       </Card>

@@ -1413,6 +1413,7 @@ export const Constants = {
         "info",
       ],
       order_source: ["qr", "app", "walk_in", "table"],
+      order_priority: ["low", "normal", "high", "vip"],
       order_status: [
         "placed",
         "accepted",
@@ -1426,6 +1427,11 @@ export const Constants = {
       payment_status: ["pending", "paid", "failed", "refunded"],
       redemption_status: ["pending", "redeemed", "cancelled"],
       reward_kind: ["points", "visits", "birthday", "referral"],
+      waitlist_status: ["active", "promoted", "cancelled", "expired"],
+      table_status: ["available", "occupied", "reserved", "cleaning", "out_of_service"],
+      feedback_category: ["food_quality", "service", "ambience", "speed", "value", "overall"],
+      referral_status: ["pending", "completed", "expired"],
+      split_type: ["equal", "percentage", "custom"],
     },
   },
 } as const

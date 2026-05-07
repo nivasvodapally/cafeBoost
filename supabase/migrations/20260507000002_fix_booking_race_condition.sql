@@ -22,11 +22,11 @@ CREATE OR REPLACE FUNCTION public.create_booking_atomic(
   _cafe_id uuid,
   _customer_user_id uuid,
   _customer_name text,
-  _customer_phone text DEFAULT NULL,
+  _customer_phone text,
   _booking_date date,
   _booking_time text,
   _persons integer,
-  _notes text DEFAULT NULL
+  _notes text
 )
 RETURNS uuid
 LANGUAGE plpgsql

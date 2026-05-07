@@ -29,6 +29,8 @@ const OwnerQR = lazy(() => import("./pages/owner/QR"));
 const OwnerStaff = lazy(() => import("./pages/owner/Staff"));
 const OwnerSettings = lazy(() => import("./pages/owner/Settings"));
 const OwnerPayments = lazy(() => import("./pages/owner/Payments"));
+const OwnerAnalytics = lazy(() => import("./pages/owner/Analytics"));
+const OwnerTableQRManagement = lazy(() => import("./pages/owner/TableQRManagement"));
 const KDSPage = lazy(() => import("./pages/KDS"));
 const StaffJoin = lazy(() => import("./pages/staff/Join"));
 const StaffDashboard = lazy(() => import("./pages/staff/Dashboard"));
@@ -43,6 +45,7 @@ const CustomerRewards = lazy(() => import("./pages/app/Rewards"));
 const CustomerBook = lazy(() => import("./pages/app/Book"));
 const CustomerBookings = lazy(() => import("./pages/app/Bookings"));
 const CustomerInvoice = lazy(() => import("./pages/app/Invoice"));
+const CustomerFavorites = lazy(() => import("./pages/app/Favorites"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -92,8 +95,10 @@ const App = () => (
                 <Route path="/owner/loyalty" element={<RequireRole role="owner"><OwnerLoyalty /></RequireRole>} />
                 <Route path="/owner/menu" element={<RequireRole role="owner"><OwnerMenu /></RequireRole>} />
                 <Route path="/owner/qr" element={<RequireRole role="owner"><OwnerQR /></RequireRole>} />
+                <Route path="/owner/table-qr" element={<RequireRole role="owner"><OwnerTableQRManagement /></RequireRole>} />
                 <Route path="/owner/staff" element={<RequireRole role="owner"><OwnerStaff /></RequireRole>} />
                 <Route path="/owner/payments" element={<RequireRole role="owner"><OwnerPayments /></RequireRole>} />
+                <Route path="/owner/analytics" element={<RequireRole role="owner"><OwnerAnalytics /></RequireRole>} />
                 <Route path="/owner/live" element={<Navigate to="/owner/orders" replace />} />
                 <Route path="/owner/settings" element={<RequireRole role="owner"><OwnerSettings /></RequireRole>} />
 
@@ -114,6 +119,7 @@ const App = () => (
                 <Route path="/app/rewards" element={<RequireRole role="customer"><CustomerRewards /></RequireRole>} />
                 <Route path="/app/book" element={<RequireRole role="customer"><CustomerBook /></RequireRole>} />
                 <Route path="/app/bookings" element={<RequireRole role="customer"><CustomerBookings /></RequireRole>} />
+                <Route path="/app/favorites" element={<RequireRole role="customer"><CustomerFavorites /></RequireRole>} />
                 <Route path="/app/orders/:id/invoice" element={<RequireRole role="customer"><CustomerInvoice /></RequireRole>} />
 
                 <Route path="*" element={<NotFound />} />
