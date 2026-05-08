@@ -1,0 +1,8 @@
+{
+  "name": "CafeBoost Dev",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm",
+  "postCreateCommand": "npm install",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  }
+}
