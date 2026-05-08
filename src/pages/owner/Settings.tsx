@@ -22,10 +22,11 @@ const makePairingCode = () => {
 
 export default function OwnerSettings() {
   const { cafe, loading, refresh } = useOwnerCafe();
-  const [form, setForm] = useState<{ name: string; email: string; phone: string; address: string; city: string; description: string; accept_online_orders: boolean; accept_reservations: boolean; loyalty_enabled: boolean; table_ordering_enabled: boolean; sound_alerts_enabled: boolean; stuck_unaccepted_minutes: number; stuck_kitchen_minutes: number; stuck_ready_minutes: number; eta_presets: string; gstin: string; tax_rate: number; }>({
+  const [form, setForm] = useState<{ name: string; email: string; phone: string; address: string; city: string; description: string; accept_online_orders: boolean; accept_reservations: boolean; loyalty_enabled: boolean; table_ordering_enabled: boolean; sound_alerts_enabled: boolean; staff_runner_enabled: boolean; kds_enabled: boolean; stuck_unaccepted_minutes: number; stuck_kitchen_minutes: number; stuck_ready_minutes: number; eta_presets: string; gstin: string; tax_rate: number; }>({
     name: "", email: "", phone: "", address: "", city: "", description: "",
     accept_online_orders: true, accept_reservations: true, loyalty_enabled: true,
     table_ordering_enabled: false, sound_alerts_enabled: true,
+    staff_runner_enabled: true, kds_enabled: true,
     stuck_unaccepted_minutes: 2, stuck_kitchen_minutes: 10, stuck_ready_minutes: 5,
     eta_presets: "5,10,15,20,30",
     gstin: "",
@@ -58,6 +59,8 @@ export default function OwnerSettings() {
       loyalty_enabled: cafe.loyalty_enabled ?? true,
       table_ordering_enabled: cafe.table_ordering_enabled ?? false,
       sound_alerts_enabled: cafe.sound_alerts_enabled ?? true,
+      staff_runner_enabled: cafe.staff_runner_enabled ?? true,
+      kds_enabled: cafe.kds_enabled ?? true,
       stuck_unaccepted_minutes: cafe.stuck_unaccepted_minutes ?? 2,
       stuck_kitchen_minutes: cafe.stuck_kitchen_minutes ?? 10,
       stuck_ready_minutes: cafe.stuck_ready_minutes ?? 5,
@@ -150,6 +153,7 @@ export default function OwnerSettings() {
       address: form.address || null, city: form.city || null, description: form.description || null,
       accept_online_orders: form.accept_online_orders, accept_reservations: form.accept_reservations, loyalty_enabled: form.loyalty_enabled,
       table_ordering_enabled: form.table_ordering_enabled, sound_alerts_enabled: form.sound_alerts_enabled,
+      staff_runner_enabled: form.staff_runner_enabled, kds_enabled: form.kds_enabled,
       stuck_unaccepted_minutes: form.stuck_unaccepted_minutes,
       stuck_kitchen_minutes: form.stuck_kitchen_minutes,
       stuck_ready_minutes: form.stuck_ready_minutes,
@@ -216,6 +220,8 @@ export default function OwnerSettings() {
           <div className="flex items-center justify-between"><div><Label>Loyalty program enabled</Label><p className="text-xs text-muted-foreground">Earn points, rewards and birthday perks.</p></div><Switch checked={form.loyalty_enabled} onCheckedChange={v => setForm(f => ({ ...f, loyalty_enabled: v }))} /></div>
           <div className="flex items-center justify-between"><div><Label>Table ordering QR</Label><p className="text-xs text-muted-foreground">Show per-table QR generator on the QR page.</p></div><Switch checked={form.table_ordering_enabled} onCheckedChange={v => setForm(f => ({ ...f, table_ordering_enabled: v }))} /></div>
           <div className="flex items-center justify-between"><div><Label>Sound alerts</Label><p className="text-xs text-muted-foreground">Play a chime when new orders arrive.</p></div><Switch checked={form.sound_alerts_enabled} onCheckedChange={v => setForm(f => ({ ...f, sound_alerts_enabled: v }))} /></div>
+          <div className="flex items-center justify-between"><div><Label>Staff runner enabled</Label><p className="text-xs text-muted-foreground">Enable staff dashboard, shift management, and runner features.</p></div><Switch checked={form.staff_runner_enabled} onCheckedChange={v => setForm(f => ({ ...f, staff_runner_enabled: v }))} /></div>
+          <div className="flex items-center justify-between"><div><Label>KDS enabled</Label><p className="text-xs text-muted-foreground">Enable Kitchen Display System (KDS) for kitchen tablets.</p></div><Switch checked={form.kds_enabled} onCheckedChange={v => setForm(f => ({ ...f, kds_enabled: v }))} /></div>
         </div>
         <div className="space-y-3 pt-4 border-t border-border">
           <div>
@@ -285,60 +291,74 @@ export default function OwnerSettings() {
           <h2 className="font-display text-xl font-bold flex items-center gap-2"><Monitor className="w-5 h-5" /> Kitchen Display (KDS)</h2>
           <p className="text-sm text-muted-foreground mt-1">Pair a tablet inside the kitchen. Once paired, it stays signed in and shows live tickets without a user login.</p>
         </div>
-
-        <div className="rounded-lg border border-border p-4 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">KDS URL</p>
-              <p className="font-mono text-sm break-all">{kdsUrl}</p>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => copy(kdsUrl, "KDS URL copied")}><Copy className="w-3.5 h-3.5" /></Button>
-          </div>
-          <div className="grid sm:grid-cols-[1fr_auto_auto] gap-3 items-end">
+        
+        {!form.kds_enabled && (
+          <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-4 py-3 text-sm flex items-start gap-2">
+            <Monitor className="w-4 h-4 mt-0.5 shrink-0 text-amber-600" />
             <div>
-              <Label className="text-xs">Pairing code</Label>
-              <p className="font-mono text-2xl font-bold tracking-widest">{pairingCode ?? "—"}</p>
-              <p className="text-[11px] text-muted-foreground mt-1">Enter this code on the KDS tablet to pair it.</p>
+              <p className="font-semibold text-amber-700 dark:text-amber-300">KDS is currently disabled</p>
+              <p className="text-muted-foreground">Kitchen tablets cannot pair or display orders. Enable KDS above to use this feature.</p>
             </div>
-            {pairingCode && (
-              <Button variant="outline" size="sm" onClick={() => copy(pairingCode!, "Code copied")}><Copy className="w-3.5 h-3.5" /></Button>
-            )}
-            <Button variant="outline" size="sm" onClick={generateNewPairingCode} disabled={genCodeBusy} className="gap-1">
-              <RefreshCw className={`w-3.5 h-3.5 ${genCodeBusy ? "animate-spin" : ""}`} /> New code
-            </Button>
           </div>
-        </div>
+        )}
 
-        <div className="rounded-lg border border-border p-4 space-y-3">
-          <div>
-            <Label>PIN fallback</Label>
-            <p className="text-xs text-muted-foreground">Set a 4–8 digit PIN as a backup pairing method. Useful if pairing-code rotation locks staff out.</p>
-          </div>
-          <div className="grid sm:grid-cols-2 gap-3">
-            <div className="space-y-1"><Label className="text-xs">PIN</Label><Input type="password" inputMode="numeric" maxLength={8} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} placeholder="••••" /></div>
-            <div className="space-y-1"><Label className="text-xs">Confirm PIN</Label><Input type="password" inputMode="numeric" maxLength={8} value={confirmPin} onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ""))} placeholder="••••" /></div>
-          </div>
-          <Button variant="outline" size="sm" onClick={setKdsPin} disabled={savingPin || !pin}>{savingPin ? <Loader2 className="w-4 h-4 animate-spin" /> : "Update PIN"}</Button>
-        </div>
-
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Paired devices</p>
-          {devices.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No devices paired yet. Open the KDS URL on a kitchen tablet and enter the pairing code.</p>
-          ) : (
-            <div className="space-y-2">
-              {devices.map((d) => (
-                <div key={d.id} className={`flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 ${!d.active ? "opacity-60" : ""}`}>
-                  <div className="min-w-0">
-                    <p className="font-semibold text-sm">{d.label || "Kitchen tablet"} {!d.active && <span className="text-[10px] uppercase text-muted-foreground ml-1">(revoked)</span>}</p>
-                    <p className="text-[11px] text-muted-foreground">Paired {new Date(d.paired_at).toLocaleString()} · last seen {d.last_seen_at ? new Date(d.last_seen_at).toLocaleString() : "never"}</p>
-                  </div>
-                  {d.active && <Button variant="ghost" size="sm" onClick={() => revokeDevice(d.id)}>Revoke</Button>}
+        {form.kds_enabled && (
+          <>
+            <div className="rounded-lg border border-border p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground">KDS URL</p>
+                  <p className="font-mono text-sm break-all">{kdsUrl}</p>
                 </div>
-              ))}
+                <Button variant="outline" size="sm" onClick={() => copy(kdsUrl, "KDS URL copied")}><Copy className="w-3.5 h-3.5" /></Button>
+              </div>
+              <div className="grid sm:grid-cols-[1fr_auto_auto] gap-3 items-end">
+                <div>
+                  <Label className="text-xs">Pairing code</Label>
+                  <p className="font-mono text-2xl font-bold tracking-widest">{pairingCode ?? "—"}</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">Enter this code on the KDS tablet to pair it.</p>
+                </div>
+                {pairingCode && (
+                  <Button variant="outline" size="sm" onClick={() => copy(pairingCode!, "Code copied")}><Copy className="w-3.5 h-3.5" /></Button>
+                )}
+                <Button variant="outline" size="sm" onClick={generateNewPairingCode} disabled={genCodeBusy} className="gap-1">
+                  <RefreshCw className={`w-3.5 h-3.5 ${genCodeBusy ? "animate-spin" : ""}`} /> New code
+                </Button>
+              </div>
             </div>
-          )}
-        </div>
+
+            <div className="rounded-lg border border-border p-4 space-y-3">
+              <div>
+                <Label>PIN fallback</Label>
+                <p className="text-xs text-muted-foreground">Set a 4–8 digit PIN as a backup pairing method. Useful if pairing-code rotation locks staff out.</p>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">PIN</Label><Input type="password" inputMode="numeric" maxLength={8} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} placeholder="••••" /></div>
+                <div className="space-y-1"><Label className="text-xs">Confirm PIN</Label><Input type="password" inputMode="numeric" maxLength={8} value={confirmPin} onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ""))} placeholder="••••" /></div>
+              </div>
+              <Button variant="outline" size="sm" onClick={setKdsPin} disabled={savingPin || !pin}>{savingPin ? <Loader2 className="w-4 h-4 animate-spin" /> : "Update PIN"}</Button>
+            </div>
+
+            <div>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Paired devices</p>
+              {devices.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No devices paired yet. Open the KDS URL on a kitchen tablet and enter the pairing code.</p>
+              ) : (
+                <div className="space-y-2">
+                  {devices.map((d) => (
+                    <div key={d.id} className={`flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 ${!d.active ? "opacity-60" : ""}`}>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm">{d.label || "Kitchen tablet"} {!d.active && <span className="text-[10px] uppercase text-muted-foreground ml-1">(revoked)</span>}</p>
+                        <p className="text-[11px] text-muted-foreground">Paired {new Date(d.paired_at).toLocaleString()} · last seen {d.last_seen_at ? new Date(d.last_seen_at).toLocaleString() : "never"}</p>
+                      </div>
+                      {d.active && <Button variant="ghost" size="sm" onClick={() => revokeDevice(d.id)}>Revoke</Button>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </Card>
     </OwnerLayout>
   );

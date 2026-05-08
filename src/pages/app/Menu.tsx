@@ -1,16 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Plus, Minus, Search, UtensilsCrossed, Trash2, Lock } from "lucide-react";
+import { Loader2, Plus, Minus, Search, UtensilsCrossed, Trash2, Lock, Heart } from "lucide-react";
 import { useActiveCafe, setActiveTable } from "@/lib/cafeContext";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { placeOrder } from "@/services/orderService";
 import { PaymentDialog } from "@/components/PaymentDialog";
+import { CustomerFavoritesService } from "@/services/customerFavoritesService";
 
 type MenuItem = { id: string; category: string; name: string; description: string | null; price: number; tags: string[] | null; available: boolean };
 type CartItem = MenuItem & { qty: number };
@@ -28,6 +29,7 @@ export default function CustomerMenu() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [ordering, setOrdering] = useState(false);
   const [newOrder, setNewOrder] = useState<{ id: string; total: number } | null>(null);
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
   // Table number — locked if customer scanned a per-table QR.
   const lockedTable = cafe?.table ?? null;
   const [tableNo, setTableNo] = useState<string>(lockedTable ?? "");
@@ -35,19 +37,41 @@ export default function CustomerMenu() {
 
   useEffect(() => { if (!cafe) { navigate("/discover"); } }, [cafe, navigate]);
 
+  // Load favorites
+  const loadFavorites = useCallback(async () => {
+    if (!cafe || !user) return;
+    try {
+      const favoritesList = await CustomerFavoritesService.getFavorites(cafe.id);
+      const favoriteIds = new Set(favoritesList.map(f => f.menu_item_id));
+      setFavorites(favoriteIds);
+    } catch (error) {
+      console.error('Failed to load favorites:', error);
+    }
+  }, [cafe, user]);
+
   useEffect(() => {
     if (!cafe) return;
     let cancelled = false;
     setLoading(true);
+    
+    // Load menu items
     void supabase.from("menu_items").select("id, category, name, description, price, tags, available")
       .eq("cafe_id", cafe.id).order("category").order("name")
       .then(({ data }) => { if (!cancelled) { setItems((data as MenuItem[]) ?? []); setLoading(false); } });
+    
+    // Load cart
     try {
       const raw = localStorage.getItem(CART_KEY(cafe.id));
       if (raw) setCart(JSON.parse(raw));
     } catch { /* ignore */ }
+    
+    // Load favorites
+    if (user) {
+      loadFavorites();
+    }
+    
     return () => { cancelled = true; };
-  }, [cafe]);
+  }, [cafe, user, loadFavorites]);
 
   useEffect(() => {
     if (!cafe) return;
@@ -64,6 +88,36 @@ export default function CustomerMenu() {
   const dec = (id: string) => setCart(p => p.map(c => c.id === id ? { ...c, qty: c.qty - 1 } : c).filter(c => c.qty > 0));
   const removeLine = (id: string) => setCart(p => p.filter(c => c.id !== id));
   const clearCart = () => setCart([]);
+
+  const toggleFavorite = async (item: MenuItem) => {
+    if (!cafe || !user) {
+      toast.error("Please sign in to save favorites");
+      return;
+    }
+    
+    try {
+      const isCurrentlyFavorite = favorites.has(item.id);
+      
+      if (isCurrentlyFavorite) {
+        // Remove from favorites
+        await CustomerFavoritesService.removeFavoriteByMenuItem(item.id, cafe.id);
+        setFavorites(prev => {
+          const next = new Set(prev);
+          next.delete(item.id);
+          return next;
+        });
+        toast.success("Removed from favorites");
+      } else {
+        // Add to favorites
+        await CustomerFavoritesService.addFavorite(item.id, cafe.id, `Favorite: ${item.name}`);
+        setFavorites(prev => new Set([...prev, item.id]));
+        toast.success("Added to favorites");
+      }
+    } catch (error: any) {
+      console.error('Failed to toggle favorite:', error);
+      toast.error(error.message || "Failed to update favorites");
+    }
+  };
 
   const submitOrder = async () => {
     if (!cafe || !user || cart.length === 0 || ordering) return;
@@ -143,6 +197,7 @@ export default function CustomerMenu() {
           <h3 className="font-display text-lg font-bold mb-3">{cat}</h3>
           <div className="space-y-2">{list.map(item => {
             const inCart = cart.find(c => c.id === item.id);
+            const isFavorite = favorites.has(item.id);
             return (
               <Card key={item.id} className={`p-4 flex items-center justify-between ${!item.available ? "opacity-50" : ""}`}>
                 <div className="min-w-0 flex-1 mr-3">
@@ -150,6 +205,15 @@ export default function CustomerMenu() {
                   {item.description && <p className="text-xs text-muted-foreground line-clamp-2">{item.description}</p>}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => toggleFavorite(item)}
+                    aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                  >
+                    <Heart className={`w-4 h-4 ${isFavorite ? "fill-red-500 text-red-500" : "text-muted-foreground"}`} />
+                  </Button>
                   <p className="text-sm font-semibold">₹{Number(item.price).toFixed(2)}</p>
                   {inCart ? (
                     <div className="flex items-center gap-2">
@@ -192,16 +256,16 @@ export default function CustomerMenu() {
                 className="h-8 text-sm"
               />
               {lockedTable ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-accent-foreground bg-accent-soft px-2 py-1 rounded-full shrink-0" title="Set by table QR">
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-accent-foreground bg-accent-soft px-2 py-1 rounded-full shrink-0" title="Set by table QR">
                   <Lock className="w-3 h-3" /> from QR
                 </span>
               ) : tableNo ? (
-                <button onClick={clearTable} className="text-[10px] text-muted-foreground hover:text-foreground shrink-0">Clear</button>
+                <button onClick={clearTable} className="text-xs text-muted-foreground hover:text-foreground shrink-0">Clear</button>
               ) : null}
             </div>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {cart.map(c => (
-                <button key={c.id} onClick={() => removeLine(c.id)} className="text-[10px] bg-muted hover:bg-muted/70 px-2 py-0.5 rounded-full text-muted-foreground">
+                <button key={c.id} onClick={() => removeLine(c.id)} className="text-xs bg-muted hover:bg-muted/70 px-2 py-1 rounded-full text-muted-foreground">
                   {c.qty}× {c.name}
                 </button>
               ))}

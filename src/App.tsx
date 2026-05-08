@@ -29,7 +29,6 @@ const OwnerQR = lazy(() => import("./pages/owner/QR"));
 const OwnerStaff = lazy(() => import("./pages/owner/Staff"));
 const OwnerSettings = lazy(() => import("./pages/owner/Settings"));
 const OwnerPayments = lazy(() => import("./pages/owner/Payments"));
-const OwnerAnalytics = lazy(() => import("./pages/owner/Analytics"));
 const OwnerTableQRManagement = lazy(() => import("./pages/owner/TableQRManagement"));
 const KDSPage = lazy(() => import("./pages/KDS"));
 const StaffJoin = lazy(() => import("./pages/staff/Join"));
@@ -98,7 +97,6 @@ const App = () => (
                 <Route path="/owner/table-qr" element={<RequireRole role="owner"><OwnerTableQRManagement /></RequireRole>} />
                 <Route path="/owner/staff" element={<RequireRole role="owner"><OwnerStaff /></RequireRole>} />
                 <Route path="/owner/payments" element={<RequireRole role="owner"><OwnerPayments /></RequireRole>} />
-                <Route path="/owner/analytics" element={<RequireRole role="owner"><OwnerAnalytics /></RequireRole>} />
                 <Route path="/owner/live" element={<Navigate to="/owner/orders" replace />} />
                 <Route path="/owner/settings" element={<RequireRole role="owner"><OwnerSettings /></RequireRole>} />
 

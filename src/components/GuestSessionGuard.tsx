@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,8 @@ import { getActiveCafe, useValidateActiveCafe } from "@/lib/cafeContext";
 
 const SUPPRESS_KEY = "cafeboost:welcome-back-suppress";
 const SESSION_TIMESTAMP_KEY = "cafeboost:guest_session_timestamp";
-const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+const SESSION_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour (changed from 24 hours)
+const ACTIVITY_EVENTS = ['click', 'scroll', 'keydown', 'mousemove', 'touchstart'];
 
 /**
  * GuestSessionGuard
@@ -29,6 +30,30 @@ export function GuestSessionGuard() {
 
   // Validate stored cafe id against DB.
   useValidateActiveCafe();
+
+  // Activity tracking to reset session timeout on user interaction
+  useEffect(() => {
+    if (user) return; // Only track for guest sessions
+    
+    const updateActivityTimestamp = () => {
+      const timestamp = sessionStorage.getItem(SESSION_TIMESTAMP_KEY);
+      if (timestamp) {
+        // Only update if we have an existing timestamp (session is active)
+        sessionStorage.setItem(SESSION_TIMESTAMP_KEY, Date.now().toString());
+      }
+    };
+
+    // Add event listeners for user activity
+    ACTIVITY_EVENTS.forEach(event => {
+      window.addEventListener(event, updateActivityTimestamp, { passive: true });
+    });
+
+    return () => {
+      ACTIVITY_EVENTS.forEach(event => {
+        window.removeEventListener(event, updateActivityTimestamp);
+      });
+    };
+  }, [user]);
 
   useEffect(() => {
     if (loading || user) return;

@@ -122,7 +122,7 @@ export default function StaffDashboard() {
             <p className="text-sm font-bold text-accent">#{o.id.slice(0, 6).toUpperCase()}</p>
             <p className="text-sm font-semibold truncate">{o.customer_name}</p>
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground">via {o.source}</span>
-            {o.table_no && <span className="text-[10px] bg-muted px-2 py-0.5 rounded-full">Table {o.table_no}</span>}
+            {o.table_no && <span className="text-xs bg-muted px-2 py-1 rounded-full">Table {o.table_no}</span>}
             <EtaBadge minutes={o.wait_eta_minutes} etaUpdatedAt={o.eta_updated_at} status={o.status} />
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">{new Date(o.created_at).toLocaleTimeString()}</p>
@@ -137,7 +137,7 @@ export default function StaffDashboard() {
             {o.payment_status === 'paid' ? 'PAID' : (o.status === 'cancelled' ? 'UNPAID' : (o.payment_method === 'cash' ? 'COLLECT CASH' : 'PAYMENT PENDING'))}
           </span>
           {o.payment_status === 'paid' && o.payment_method === 'cash' && o.collector_name && (
-            <span className="text-[9px] text-muted-foreground italic">Collected by {o.collector_name}</span>
+            <span className="text-xs text-muted-foreground italic">Collected by {o.collector_name}</span>
           )}
           <span className={`text-xs font-medium px-2 py-1 rounded-full ${pillClass(o.status)}`}>{o.status}</span>
         </div>

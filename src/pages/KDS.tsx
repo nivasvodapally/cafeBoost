@@ -210,8 +210,8 @@ export default function KDSPage() {
           <div className="flex items-center gap-1 text-xs">
             <Clock className="w-3 h-3" />
             <span className={hot ? "font-bold text-destructive" : "font-semibold"}>{minutes}m</span>
-            {o.payment_status === "paid" && <span className="ml-2 text-[10px] bg-success/15 text-success px-1.5 py-0.5 rounded font-bold">PAID</span>}
-            {o.payment_status === "pending" && <span className="ml-2 text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded font-bold">UNPAID</span>}
+            {o.payment_status === "paid" && <span className="ml-2 text-xs bg-success/15 text-success px-2 py-1 rounded font-bold">PAID</span>}
+            {o.payment_status === "pending" && <span className="ml-2 text-xs bg-amber-500/15 text-amber-700 dark:text-amber-300 px-2 py-1 rounded font-bold">UNPAID</span>}
           </div>
         </div>
         <div className="space-y-1 pt-2 border-t border-border">

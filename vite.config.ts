@@ -2,7 +2,10 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
+import { fileURLToPath } from "url";
 import { copyFileSync, existsSync } from "node:fs";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const spaFallbackPlugin = () => ({
   name: "spa-404-fallback",

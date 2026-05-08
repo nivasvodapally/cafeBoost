@@ -26,7 +26,7 @@ export default function CustomerFavorites() {
   const cafe = useActiveCafe();
   const [favorites, setFavorites] = useState<FavoriteMenuItem[]>([]);
   const [referralCode, setReferralCode] = useState<string>("");
-  const [referralStats, setReferralStats] = useState<{ totalReferrals: number; pendingReferrals: number; completedReferrals: number; rewardAmount: number } | null>(null);
+  const [referralStats, setReferralStats] = useState<{ referral_count: number; pending_referrals: number; completed_referrals: number; total_referral_rewards: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [addFavoriteDialog, setAddFavoriteDialog] = useState(false);
   const [editFavoriteDialog, setEditFavoriteDialog] = useState<{ open: boolean; favorite: FavoriteMenuItem | null }>({ open: false, favorite: null });
@@ -193,7 +193,7 @@ export default function CustomerFavorites() {
                       {fav.notes && (
                         <p className="text-xs text-muted-foreground mt-2 italic">"{fav.notes}"</p>
                       )}
-                      <p className="text-[10px] text-muted-foreground mt-2">
+                      <p className="text-xs text-muted-foreground mt-2">
                         Added {new Date(fav.created_at).toLocaleDateString()}
                       </p>
                     </div>
@@ -252,7 +252,7 @@ export default function CustomerFavorites() {
                   <Users className="w-5 h-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-display font-bold">{referralStats?.totalReferrals || 0}</p>
+                  <p className="text-2xl font-display font-bold">{referralStats?.referral_count || 0}</p>
                   <p className="text-xs text-muted-foreground">Total Referrals</p>
                 </div>
               </div>
@@ -264,7 +264,7 @@ export default function CustomerFavorites() {
                   <Gift className="w-5 h-5 text-amber-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-display font-bold">{referralStats?.completedReferrals || 0}</p>
+                  <p className="text-2xl font-display font-bold">{referralStats?.completed_referrals || 0}</p>
                   <p className="text-xs text-muted-foreground">Completed</p>
                 </div>
               </div>
@@ -276,7 +276,7 @@ export default function CustomerFavorites() {
                   <Star className="w-5 h-5 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-display font-bold">₹{referralStats?.rewardAmount || 0}</p>
+                  <p className="text-2xl font-display font-bold">₹{referralStats?.total_referral_rewards || 0}</p>
                   <p className="text-xs text-muted-foreground">Reward Value</p>
                 </div>
               </div>

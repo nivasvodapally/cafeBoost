@@ -144,7 +144,7 @@ export default function OwnerPayments() {
               return (
                 <div key={s.date} className="flex-1 flex flex-col items-center gap-1 group" title={`${s.date} · ${cur} ${Number(s.revenue).toFixed(0)} · ${s.orders} orders`}>
                   <div className="w-full bg-accent/30 group-hover:bg-accent transition-smooth rounded-t" style={{ height: `${h}%` }} />
-                  <span className="text-[9px] text-muted-foreground">{s.date.slice(5)}</span>
+                  <span className="text-xs text-muted-foreground">{s.date.slice(5)}</span>
                 </div>
               );
             })}

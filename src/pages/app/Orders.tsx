@@ -77,13 +77,10 @@ export default function CustomerOrders() {
   const [paymentOrder, setPaymentOrder] = useState<Order | null>(null);
   const [cancelDialog, setCancelDialog] = useState<{ open: boolean; orderId: string | null }>({ open: false, orderId: null });
   const [refundDialog, setRefundDialog] = useState<{ open: boolean; orderId: string | null }>({ open: false, orderId: null });
-  const [modifyDialog, setModifyDialog] = useState<{ open: boolean; order: Order | null }>({ open: false, order: null });
   const [splitDialog, setSplitDialog] = useState<{ open: boolean; order: Order | null }>({ open: false, order: null });
-  const [modificationReason, setModificationReason] = useState('');
   const [splitType, setSplitType] = useState<'equal' | 'custom'>('equal');
   const [splitCount, setSplitCount] = useState(2);
   const [customSplits, setCustomSplits] = useState<Record<string, number>>({});
-  const [modificationLoading, setModificationLoading] = useState(false);
   const [splitLoading, setSplitLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -134,7 +131,7 @@ export default function CustomerOrders() {
   const handleRefundConfirm = async () => {
     if (!refundDialog.orderId) return;
     type RefundResponse = { success?: boolean; error?: string };
-    const { data, error } = await supabase.rpc("initiate_refund_request" as never, { _order_id: refundDialog.orderId });
+    const { data, error } = await supabase.rpc("initiate_refund_request", { _order_id: refundDialog.orderId });
     if (error) toast.error(error.message);
     else if (data && !(data as RefundResponse).success) {
       toast.error((data as RefundResponse).error || "Unknown error");
@@ -167,23 +164,6 @@ export default function CustomerOrders() {
     }
   };
 
-  const handleModifyOrder = async (o: Order) => {
-    try {
-      // Check if order can be modified
-      const canModify = await OrderModificationService.canModifyOrder(o.id);
-      if (!canModify.canModify) {
-        toast.error(canModify.reason || "This order cannot be modified at this time.");
-        return;
-      }
-      
-      setModifyDialog({ open: true, order: o });
-      setModificationReason('');
-    } catch (error) {
-      console.error('Error checking modification:', error);
-      toast.error("Unable to check if order can be modified. Please try again.");
-    }
-  };
-
   const handleSplitOrder = async (o: Order) => {
     try {
       // Check if order can be split (has multiple items)
@@ -200,36 +180,6 @@ export default function CustomerOrders() {
     } catch (error) {
       console.error('Error preparing split:', error);
       toast.error("Unable to prepare order split. Please try again.");
-    }
-  };
-
-  const handleModifySubmit = async () => {
-    if (!modifyDialog.order || !modificationReason.trim()) {
-      toast.error("Please provide a reason for modification.");
-      return;
-    }
-
-    setModificationLoading(true);
-    try {
-      const result = await OrderModificationService.modifyOrder({
-        orderId: modifyDialog.order.id,
-        reason: modificationReason.trim(),
-        userId: user?.id || ''
-      });
-
-      if (result.success) {
-        toast.success("Order modification request submitted successfully!");
-        setModifyDialog({ open: false, order: null });
-        setModificationReason('');
-        void fetchAll(); // Refresh orders
-      } else {
-        toast.error(result.error || "Failed to submit modification request.");
-      }
-    } catch (error) {
-      console.error('Error modifying order:', error);
-      toast.error("An error occurred while modifying the order.");
-    } finally {
-      setModificationLoading(false);
     }
   };
 
@@ -312,10 +262,10 @@ export default function CustomerOrders() {
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-bold">Order #{o.id.slice(0, 6).toUpperCase()}</p>
-                    {o.table_no && <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded-full font-medium">Table {o.table_no}</span>}
+                    {o.table_no && <span className="text-xs bg-muted px-2 py-1 rounded-full font-medium">Table {o.table_no}</span>}
                     {/* Priority Badge */}
                     {o.priority && o.priority !== 'normal' && (
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium flex items-center gap-1 ${getPriorityBadge(o.priority).bg} ${getPriorityBadge(o.priority).text}`}>
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium flex items-center gap-1 ${getPriorityBadge(o.priority).bg} ${getPriorityBadge(o.priority).text}`}>
                         {(() => {
                           const Icon = getPriorityBadge(o.priority).icon;
                           return <Icon className="w-3 h-3" />;
@@ -325,29 +275,29 @@ export default function CustomerOrders() {
                     )}
                     {/* Modification Indicator */}
                     {o.original_order_id && (
-                      <span className="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium flex items-center gap-1">
+                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-medium flex items-center gap-1">
                         <Edit className="w-3 h-3" /> Modified
                       </span>
                     )}
                     {/* Split Order Indicator */}
                     {o.split_parent_id && (
-                      <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium flex items-center gap-1">
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium flex items-center gap-1">
                         <Split className="w-3 h-3" /> Split
                       </span>
                     )}
                   </div>
-                  <p className="text-[10px] text-muted-foreground">{new Date(o.created_at).toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">{new Date(o.created_at).toLocaleString()}</p>
                   {/* Modification details */}
                   {o.modification_reason && (
-                    <p className="text-[10px] text-blue-600 mt-1 italic">"{o.modification_reason}"</p>
+                    <p className="text-xs text-blue-600 mt-1 italic">"{o.modification_reason}"</p>
                   )}
                   {o.split_total_count && o.split_total_count > 1 && (
-                    <p className="text-[10px] text-green-600 mt-1">Part {o.split_sequence} of {o.split_total_count}</p>
+                    <p className="text-xs text-green-600 mt-1">Part {o.split_sequence} of {o.split_total_count}</p>
                   )}
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-bold text-accent">₹{Number(o.total_amount).toFixed(2)}</p>
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                  <span className={`text-xs font-bold px-2 py-1 rounded ${
                     isPaid ? 'bg-success/10 text-success' : (o.status === 'cancelled' ? 'bg-muted text-muted-foreground' : 'bg-amber-500/10 text-amber-600')
                   }`}>
                     {o.status === 'cancelled' && !isPaid ? 'UNPAID' : o.payment_status.toUpperCase()}
@@ -364,20 +314,20 @@ export default function CustomerOrders() {
                   {isPaid && (
                     <div className="mt-2 pt-2 border-t border-destructive/10">
                       {o.refund_workflow_status === 'requested' ? (
-                        <div className="text-[10px] text-amber-600 font-bold italic animate-pulse flex items-center gap-2">
+                        <div className="text-xs text-amber-600 font-bold italic animate-pulse flex items-center gap-2">
                           <RotateCcw className="w-3 h-3" /> Refund pending review
                         </div>
                       ) : o.refund_workflow_status === 'refunded' ? (
-                        <div className="text-[10px] text-success font-bold flex items-center gap-2 uppercase">
+                        <div className="text-xs text-success font-bold flex items-center gap-2 uppercase">
                           <Check className="w-3 h-3" /> Amount Refunded
                         </div>
                       ) : o.refund_workflow_status === 'rejected' ? (
                         <div className="space-y-2">
-                          <div className="text-[10px] text-destructive font-bold flex items-center gap-2 uppercase">
+                          <div className="text-xs text-destructive font-bold flex items-center gap-2 uppercase">
                             <X className="w-3 h-3" /> Refund Denied
                           </div>
-                          {o.refund_rejection_reason && <p className="text-[10px] text-muted-foreground italic px-2 py-1 bg-white/50 rounded text-center border border-destructive/5">"{o.refund_rejection_reason}"</p>}
-                          <Button variant="outline" size="sm" className="w-full h-7 text-[10px]" onClick={() => requestRefund(o.id)}>Request Again</Button>
+                          {o.refund_rejection_reason && <p className="text-xs text-muted-foreground italic px-2 py-1 bg-white/50 rounded text-center border border-destructive/5">"{o.refund_rejection_reason}"</p>}
+                          <Button variant="outline" size="sm" className="w-full h-8 text-xs" onClick={() => requestRefund(o.id)}>Request Again</Button>
                         </div>
                       ) : (
                         <Button variant="hero" size="sm" className="w-full h-8" onClick={() => requestRefund(o.id)}>
@@ -392,20 +342,44 @@ export default function CustomerOrders() {
                   <AlertCircle className="w-4 h-4" /> Cancellation Pending
                 </div>
               ) : (
-                <div className="flex justify-between mb-4 px-2">
-                  {TIMELINE.map((step, i) => {
-                    const reached = i <= idx;
-                    const Icon = step.icon;
-                    return (
-                      <div key={step.key} className="flex flex-col items-center">
-                        <div className={`w-8 h-8 rounded-full grid place-items-center ${reached ? "bg-accent text-accent-foreground shadow-lg shadow-accent/20" : "bg-muted text-muted-foreground"}`}>
-                          <Icon className="w-4 h-4" />
+                <>
+                  <div className="flex justify-between mb-4 px-2">
+                    {TIMELINE.map((step, i) => {
+                      const reached = i <= idx;
+                      const Icon = step.icon;
+                      return (
+                        <div key={step.key} className="flex flex-col items-center">
+                          <div className={`w-8 h-8 rounded-full grid place-items-center ${reached ? "bg-accent text-accent-foreground shadow-lg shadow-accent/20" : "bg-muted text-muted-foreground"}`}>
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <span className={`text-[8px] mt-1 font-bold uppercase ${reached ? "text-foreground" : "text-muted-foreground"}`}>{step.label}</span>
                         </div>
-                        <span className={`text-[8px] mt-1 font-bold uppercase ${reached ? "text-foreground" : "text-muted-foreground"}`}>{step.label}</span>
+                      );
+                    })}
+                  </div>
+                  
+                  {/* ETA Display */}
+                  {o.wait_eta_minutes !== null && o.wait_eta_minutes !== undefined && o.status !== 'completed' && (
+                    <div className="mb-4 px-2">
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-blue-600" />
+                          <div>
+                            <p className="text-xs font-bold text-blue-800">Estimated Ready Time</p>
+                            <p className="text-xs text-blue-600">
+                              {o.wait_eta_minutes} minute{o.wait_eta_minutes !== 1 ? 's' : ''}
+                            </p>
+                          </div>
+                        </div>
+                        {o.eta_updated_at && (
+                          <p className="text-xs text-blue-500/70">
+                            Updated {new Date(o.eta_updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Items List */}
@@ -427,12 +401,6 @@ export default function CustomerOrders() {
                 )}
                 {!o.cancellation_requested && o.status !== "cancelled" && (o.status === "placed" || o.status === "accepted") && (
                   <Button variant="outline" size="sm" className="flex-1 text-destructive border-destructive/20 h-8" onClick={() => cancelByCustomer(o.id)}>Cancel</Button>
-                )}
-                {/* Order Modification Button - only for recent orders */}
-                {!o.original_order_id && (o.status === "placed" || o.status === "accepted") && (
-                  <Button variant="outline" size="sm" className="flex-1 h-8 gap-1" onClick={() => handleModifyOrder(o)}>
-                    <Edit className="w-3 h-3" /> Modify
-                  </Button>
                 )}
                 {/* Order Split Button - only for orders with multiple items */}
                 {!o.split_parent_id && (o.status === "placed" || o.status === "accepted") && (items[o.id]?.length || 0) > 1 && (
@@ -503,50 +471,6 @@ export default function CustomerOrders() {
         </AlertDialogContent>
       </AlertDialog>
  
-      {/* Order Modification Dialog */}
-      <Dialog open={modifyDialog.open} onOpenChange={(open) => setModifyDialog({ ...modifyDialog, open })}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Modify Order</DialogTitle>
-            <DialogDescription>
-              Request changes to your order #{modifyDialog.order?.id.slice(0, 6).toUpperCase()}. Staff will review your request.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="modification-reason">Reason for modification</Label>
-              <Textarea
-                id="modification-reason"
-                placeholder="Please explain what changes you'd like to make (e.g., add extra cheese, remove onions, change item size)"
-                value={modificationReason}
-                onChange={(e) => setModificationReason(e.target.value)}
-                className="min-h-[100px]"
-              />
-            </div>
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <p className="text-xs text-amber-800 font-medium flex items-center gap-2">
-                <AlertCircle className="w-4 h-4" />
-                Note: Modifications are subject to staff approval and may affect the total amount.
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setModifyDialog({ open: false, order: null })} disabled={modificationLoading}>
-              Cancel
-            </Button>
-            <Button onClick={handleModifySubmit} disabled={modificationLoading || !modificationReason.trim()}>
-              {modificationLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Submitting...
-                </>
-              ) : (
-                'Submit Modification Request'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
  
       {/* Order Split Dialog */}
       <Dialog open={splitDialog.open} onOpenChange={(open) => setSplitDialog({ ...splitDialog, open })}>

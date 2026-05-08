@@ -191,7 +191,7 @@ export default function OwnerOrders() {
     if (!window.confirm(`${label}?`)) return;
     try {
       type RpcResponse = { success?: boolean; error?: string };
-      const { data, error } = await (supabase.rpc as never)('finalize_order_refund', { _order_id: orderId });
+      const { data, error } = await supabase.rpc('finalize_order_refund', { _order_id: orderId });
       if (error) throw error;
       if (data && !(data as RpcResponse).success) throw new Error((data as RpcResponse).error || "Refund failed");
       toast.success("Refund processed successfully");
@@ -205,7 +205,7 @@ export default function OwnerOrders() {
     if (reason === null) return;
     try {
       type RpcResponse = { success?: boolean; error?: string };
-      const { data, error } = await (supabase.rpc as never)('deny_refund_request', { _order_id: orderId, _reason: reason });
+      const { data, error } = await supabase.rpc('deny_refund_request', { _order_id: orderId, _reason: reason });
       if (error) throw error;
       if (data && !(data as RpcResponse).success) throw new Error((data as RpcResponse).error || "Failed to reject refund");
       toast.success("Refund request rejected");
@@ -240,10 +240,10 @@ export default function OwnerOrders() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-bold text-accent">#{o.id.slice(0, 6).toUpperCase()}</p>
                       <p className="text-sm font-semibold truncate">{o.customer_name}</p>
-                      {o.table_no && <span className="text-[10px] bg-muted px-2 py-0.5 rounded-full">Table {o.table_no}</span>}
+                      {o.table_no && <span className="text-xs bg-muted px-2 py-1 rounded-full">Table {o.table_no}</span>}
                     </div>
-                    <p className="text-[10px] text-muted-foreground mt-1">{new Date(o.created_at).toLocaleString()} {o.assignee_name && <span className="text-accent font-medium">→ {o.assignee_name}</span>}</p>
-                    {o.notes && <p className="text-[10px] text-muted-foreground mt-1 bg-muted/30 p-1 rounded italic">"{o.notes}"</p>}
+                    <p className="text-xs text-muted-foreground mt-1">{new Date(o.created_at).toLocaleString()} {o.assignee_name && <span className="text-accent font-medium">→ {o.assignee_name}</span>}</p>
+                    {o.notes && <p className="text-xs text-muted-foreground mt-1 bg-muted/30 p-1 rounded italic">"{o.notes}"</p>}
                   </div>
                     <div className="flex flex-col items-end gap-1">
                       <p className="text-sm font-bold">₹{Number(o.total_amount).toFixed(2)}</p>
@@ -254,7 +254,7 @@ export default function OwnerOrders() {
                           {o.payment_status === 'paid' ? 'PAID' : (o.status === 'cancelled' ? 'UNPAID' : (o.payment_method === 'cash' ? 'COLLECT CASH' : 'PAYMENT PENDING'))}
                         </span>
                         {o.payment_status === 'paid' && (
-                          <span className="text-[9px] text-muted-foreground italic">
+                          <span className="text-xs text-muted-foreground italic">
                             {o.collector_name ? `Collected by ${o.collector_name}` : (o.payment_method === 'cash' ? 'Cash Collection' : 'Online Payment')}
                           </span>
                         )}
@@ -309,7 +309,7 @@ export default function OwnerOrders() {
                 {o.refunded_at && (
                   <div className="mt-3 p-2 bg-destructive/10 rounded flex items-center justify-between">
                     <span className="text-[10px] font-bold text-destructive uppercase">Refunded</span>
-                    <span className="text-[9px] text-muted-foreground italic">by {o.refunded_by_name || 'Staff'} on {new Date(o.refunded_at).toLocaleDateString()}</span>
+                    <span className="text-xs text-muted-foreground italic">by {o.refunded_by_name || 'Staff'} on {new Date(o.refunded_at).toLocaleDateString()}</span>
                   </div>
                 )}
 

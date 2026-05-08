@@ -11,7 +11,6 @@ const nav = [
   { to: "/app/menu", label: "Menu", icon: UtensilsCrossed },
   { to: "/app/bookings", label: "Bookings", icon: CalendarCheck },
   { to: "/app/rewards", label: "Rewards", icon: Gift },
-  { to: "/app/favorites", label: "Favorites", icon: Heart },
   { to: "/app/orders", label: "Orders", icon: ClipboardList },
   { to: "/app/profile", label: "Profile", icon: User },
 ];
@@ -100,21 +99,21 @@ export function CustomerLayout({
         {children}
       </div>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-30 bg-background/95 backdrop-blur-md border-t border-border lg:hidden">
-        <div className="grid grid-cols-6 max-w-3xl mx-auto">
+      <nav className="fixed bottom-0 left-0 right-0 z-30 bg-background/95 backdrop-blur-md border-t border-border lg:hidden safe-bottom">
+        <div className="grid grid-cols-6 max-w-3xl mx-auto px-1">
           {nav.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
               end={end}
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition-smooth ${
+                `flex flex-col items-center justify-center gap-1 py-3 text-xs font-medium transition-smooth min-h-[4rem] ${
                   isActive ? "text-accent" : "text-muted-foreground"
                 }`
               }
             >
               <Icon className="w-5 h-5" />
-              {label}
+              <span className="text-xs">{label}</span>
             </NavLink>
           ))}
         </div>

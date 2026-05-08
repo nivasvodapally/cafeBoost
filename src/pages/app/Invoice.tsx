@@ -97,7 +97,7 @@ export default function CustomerInvoice() {
                 {order.invoice_number ?? `#${order.id.slice(0, 8).toUpperCase()}`}
               </p>
               <p className="text-xs text-muted-foreground mt-1">{new Date(order.created_at).toLocaleString()}</p>
-              <span className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold mt-2 px-2 py-1 rounded-full ${isPaid ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>
+              <span className={`inline-flex items-center gap-1 text-xs uppercase tracking-wider font-semibold mt-2 px-2 py-1 rounded-full ${isPaid ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>
                 {isPaid ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
                 {order.payment_status}
               </span>

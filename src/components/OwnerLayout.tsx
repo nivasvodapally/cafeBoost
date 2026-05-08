@@ -17,11 +17,8 @@ const nav = [
   { to: "/owner/loyalty", label: "Loyalty", icon: Gift },
   { to: "/owner/menu", label: "Menu", icon: UtensilsCrossed },
   { to: "/owner/qr", label: "QR Codes", icon: QrCode },
-  { to: "/owner/table-qr", label: "Table QR Management", icon: Table },
   { to: "/owner/staff", label: "Staff", icon: UserRoundCog },
   { to: "/owner/payments", label: "Payments", icon: Wallet },
-  { to: "/owner/analytics", label: "Analytics", icon: Activity },
-  { to: "/kds", label: "Open KDS", icon: Monitor },
   { to: "/owner/settings", label: "Settings", icon: Settings },
 ];
 

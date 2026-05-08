@@ -10,7 +10,18 @@ import { useStaffCafe } from "@/hooks/useStaffCafe";
 
 type ShiftRow = { id: string; clock_in_at: string; clock_out_at: string | null; total_break_seconds: number };
 type OpenInfo = { open_shift: { id: string; clock_in_at: string } | null; open_break: { id: string; started_at: string } | null };
-type StaffStats = OpenInfo;
+type StaffStats = {
+  orders_accepted: number;
+  orders_prepared: number;
+  orders_served: number;
+  orders_completed: number;
+  revenue_touched: number;
+  avg_prep_seconds: number;
+  avg_serve_seconds: number;
+  hours_worked: number;
+  open_shift: { id: string; clock_in_at: string } | null;
+  open_break: { id: string; started_at: string } | null;
+};
 type ShiftRpc = "clock_in" | "clock_out" | "start_break" | "end_break";
 
 const fmtDur = (sec: number) => {
@@ -21,7 +32,7 @@ const fmtDur = (sec: number) => {
 export default function StaffShift() {
   const { user } = useAuth();
   const { cafe } = useStaffCafe();
-  const [info, setInfo] = useState<OpenInfo | null>(null);
+  const [info, setInfo] = useState<StaffStats | null>(null);
   const [history, setHistory] = useState<ShiftRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -29,15 +40,33 @@ export default function StaffShift() {
 
   const load = useCallback(async () => {
     if (!user) return;
-    const [{ data: stats }, { data: hist }] = await Promise.all([
-      supabase.rpc("get_my_staff_stats", { _days: 30 }),
-      supabase.from("staff_shifts").select("id, clock_in_at, clock_out_at, total_break_seconds")
-        .eq("user_id", user.id).order("clock_in_at", { ascending: false }).limit(20),
-    ]);
-    const typedStats = stats as StaffStats | null;
-    setInfo({ open_shift: typedStats?.open_shift ?? null, open_break: typedStats?.open_break ?? null });
-    setHistory((hist as ShiftRow[] | null) ?? []);
-    setLoading(false);
+    try {
+      const [{ data: stats, error: statsError }, { data: hist, error: histError }] = await Promise.all([
+        supabase.rpc("get_my_staff_stats", { _days: 30 }),
+        supabase.from("staff_shifts").select("id, clock_in_at, clock_out_at, total_break_seconds")
+          .eq("user_id", user.id).order("clock_in_at", { ascending: false }).limit(20),
+      ]);
+      
+      if (statsError) {
+        console.error("Failed to load staff stats:", statsError);
+        toast.error("Failed to load shift data");
+        return;
+      }
+      
+      if (histError) {
+        console.error("Failed to load shift history:", histError);
+        toast.error("Failed to load shift history");
+        return;
+      }
+      
+      setInfo(stats as StaffStats | null);
+      setHistory((hist as ShiftRow[] | null) ?? []);
+    } catch (err) {
+      console.error("Error loading shift data:", err);
+      toast.error("Failed to load shift data");
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
 
   useEffect(() => { void load(); }, [load]);
@@ -45,17 +74,41 @@ export default function StaffShift() {
 
   const call = async (rpc: ShiftRpc, ok: string) => {
     setBusy(true);
-    const { error } = await supabase.rpc(rpc);
-    if (error) toast.error(error.message); else toast.success(ok);
-    await load(); setBusy(false);
+    try {
+      const { error } = await supabase.rpc(rpc);
+      if (error) {
+        // Provide more user-friendly error messages
+        if (error.message.includes('No active staff assignment')) {
+          toast.error("You are not assigned as staff to any cafe. Please contact your manager.");
+        } else if (error.message.includes('No open shift')) {
+          toast.error("You are not clocked in. Please clock in first.");
+        } else if (error.message.includes('Clock in first')) {
+          toast.error("Please clock in before starting a break.");
+        } else if (error.message.includes('A break is already in progress')) {
+          toast.error("You already have an active break. Please end it first.");
+        } else if (error.message.includes('No active break')) {
+          toast.error("No active break found. You may have already ended it.");
+        } else {
+          toast.error(error.message);
+        }
+      } else {
+        toast.success(ok);
+      }
+    } catch (err) {
+      console.error(`Error calling ${rpc}:`, err);
+      toast.error("An unexpected error occurred");
+    } finally {
+      await load();
+      setBusy(false);
+    }
   };
 
   if (loading) return <StaffLayout title="Shift"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div></StaffLayout>;
 
   const onShift = !!info?.open_shift;
   const onBreak = !!info?.open_break;
-  const elapsed = onShift ? Math.floor((Date.now() + tick * 0 - new Date(info!.open_shift!.clock_in_at).getTime()) / 1000) : 0;
-  const breakElapsed = onBreak ? Math.floor((Date.now() - new Date(info!.open_break!.started_at).getTime()) / 1000) : 0;
+  const elapsed = onShift && info?.open_shift ? Math.floor((Date.now() - new Date(info.open_shift.clock_in_at).getTime()) / 1000) : 0;
+  const breakElapsed = onBreak && info?.open_break ? Math.floor((Date.now() - new Date(info.open_break.started_at).getTime()) / 1000) : 0;
 
   return (
     <StaffLayout title="Shift" subtitle={`${cafe?.name ?? ""} · clock in & out, take breaks`}>

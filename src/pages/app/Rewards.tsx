@@ -100,7 +100,7 @@ export default function CustomerRewards() {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="font-mono text-sm font-bold tracking-widest">{h.code}</p>
-                    <span className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold mt-0.5 px-1.5 py-0.5 rounded ${
+                    <span className={`inline-flex items-center gap-1 text-xs uppercase tracking-wider font-semibold mt-0.5 px-1.5 py-0.5 rounded ${
                       redeemed ? "bg-success/15 text-success" :
                       pending ? "bg-accent-soft text-accent-foreground" :
                       "bg-muted text-muted-foreground"

@@ -68,94 +68,194 @@ export default function OwnerAnalytics() {
 
   const fetchAnalytics = async () => {
     if (!cafe?.id) return;
-    
+
     setLoading(true);
     try {
-      // Fetch orders data
+      const now = Date.now();
+      const periodMs = period === 'today' ? 24 * 60 * 60 * 1000
+        : period === 'week' ? 7 * 24 * 60 * 60 * 1000
+        : period === 'month' ? 30 * 24 * 60 * 60 * 1000
+        : 90 * 24 * 60 * 60 * 1000;
+      const since = new Date(now - periodMs).toISOString();
+
+      // Fetch completed orders for the period
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
-        .select('total_amount, created_at, status')
+        .select('total_amount, created_at, status, payment_method, payment_status, refunded_at, accepted_at, preparing_at, ready_at, completed_at')
         .eq('cafe_id', cafe.id)
-        .gte('created_at', new Date(Date.now() - (period === 'today' ? 24*60*60*1000 : period === 'week' ? 7*24*60*60*1000 : period === 'month' ? 30*24*60*60*1000 : 90*24*60*60*1000)).toISOString())
+        .gte('created_at', since)
         .eq('status', 'completed');
-      
+
       if (ordersError) throw ordersError;
 
-      // Calculate basic operational metrics
+      // Fetch all order IDs for this cafe in the period
+      const { data: allOrderIds } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('cafe_id', cafe.id)
+        .gte('created_at', since)
+        .in('status', ['completed', 'cancelled']);
+
+      const orderIdList = (allOrderIds ?? []).map((o: { id: string }) => o.id);
+
+      // Fetch refund data
+      const refundedCount = (ordersData ?? []).filter((o: Record<string, unknown>) => o['refunded_at']).length;
+      const refundRate = ordersData?.length ? refundedCount / ordersData.length : 0;
+
+      // Calculate financial metrics from real orders
       const totalOrders = ordersData?.length || 0;
       const totalRevenue = ordersData?.reduce((sum: number, order: Record<string, unknown>) => sum + ((order.total_amount as number) || 0), 0) || 0;
       const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-      
-      // For demo purposes, create simulated data
+      const hoursInPeriod = period === 'today' ? 24 : period === 'week' ? 168 : period === 'month' ? 720 : 2160;
+      const ordersPerHour = totalOrders / hoursInPeriod;
+
+      // Revenue by hour (from completed orders)
+      const revenueByHour: Record<number, number> = {};
+      (ordersData ?? []).forEach((o: Record<string, unknown>) => {
+        const h = new Date(o.created_at as string).getHours();
+        revenueByHour[h] = (revenueByHour[h] || 0) + ((o.total_amount as number) || 0);
+      });
+
+      // Find peak hour
+      let peakHour = 12;
+      let maxRevenue = 0;
+      Object.entries(revenueByHour).forEach(([h, r]) => {
+        if (r > maxRevenue) { maxRevenue = r; peakHour = parseInt(h); }
+      });
+
+      // Revenue by payment method
+      const revenueByMethod: Record<string, number> = {};
+      (ordersData ?? []).forEach((o: Record<string, unknown>) => {
+        const m = (o.payment_method as string) || 'Unknown';
+        revenueByMethod[m] = (revenueByMethod[m] || 0) + ((o.total_amount as number) || 0);
+      });
+
+      setFinancialData({
+        revenue_trend: 0, // TODO: compare to previous period for trend
+        revenue_by_payment_method: Object.entries(revenueByMethod).map(([method, amount_cents]) => ({
+          method,
+          amount_cents: amount_cents * 100
+        })),
+        refund_rate: refundRate,
+        average_tip_percentage: 0,
+        revenue_by_hour: Array.from({ length: 24 }, (_, i) => ({
+          hour: i,
+          revenue_cents: (revenueByHour[i] || 0) * 100
+        })),
+        customer_lifetime_value: 0,
+        repeat_customer_rate: 0
+      });
+
+      // Most popular items from order_items
+      let mostPopularItems: Array<{ name: string; count: number }> = [];
+      if (orderIdList.length > 0) {
+        const { data: itemsData } = await supabase
+          .from('order_items')
+          .select('name')
+          .in('order_id', orderIdList);
+
+        const itemCounts: Record<string, number> = {};
+        (itemsData ?? []).forEach((item: { name: string }) => {
+          if (item.name) itemCounts[item.name] = (itemCounts[item.name] || 0) + 1;
+        });
+        mostPopularItems = Object.entries(itemCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([name, count]) => ({ name, count }));
+      }
+
+      // Calculate avg preparation time from real timestamps
+      const prepTimes: number[] = [];
+      (ordersData ?? []).forEach((o: Record<string, unknown>) => {
+        if (o.accepted_at && o.ready_at) {
+          const mins = (new Date(o.ready_at as string).getTime() - new Date(o.accepted_at as string).getTime()) / 60000;
+          if (mins > 0 && mins < 120) prepTimes.push(mins);
+        }
+      });
+      const avgPrepTime = prepTimes.length > 0 ? prepTimes.reduce((a, b) => a + b, 0) / prepTimes.length : 0;
+
       setOperationalData({
         total_orders: totalOrders,
-        total_revenue_cents: totalRevenue * 100, // Convert to cents
+        total_revenue_cents: totalRevenue * 100,
         avg_order_value_cents: avgOrderValue * 100,
-        orders_per_hour: totalOrders / (period === 'today' ? 24 : period === 'week' ? 168 : period === 'month' ? 720 : 2160),
-        peak_hour: '12:00-13:00',
-        table_turnover_rate: 2.5,
-        avg_preparation_time_minutes: 15.3,
-        waitlist_conversion_rate: 0.65,
-        most_popular_items: [
-          { name: "Cappuccino", count: 42 },
-          { name: "Croissant", count: 28 },
-          { name: "Sandwich", count: 23 },
-          { name: "Latte", count: 19 },
-          { name: "Tea", count: 15 }
-        ]
+        orders_per_hour: ordersPerHour,
+        peak_hour: `${peakHour}:00-${peakHour + 1}:00`,
+        table_turnover_rate: 0, // TODO: real calculation from bookings
+        avg_preparation_time_minutes: avgPrepTime,
+        waitlist_conversion_rate: 0, // TODO: real from waitlist data
+        most_popular_items: mostPopularItems
       });
 
-      // Simulate financial data
-      setFinancialData({
-        revenue_trend: 12.5,
-        revenue_by_payment_method: [
-          { method: 'UPI', amount_cents: 450000 },
-          { method: 'Card', amount_cents: 280000 },
-          { method: 'Cash', amount_cents: 120000 }
-        ],
-        refund_rate: 0.02,
-        average_tip_percentage: 8.5,
-        revenue_by_hour: Array.from({ length: 24 }, (_, i) => ({ 
-          hour: i, 
-          revenue_cents: Math.floor(Math.random() * 50000) + 10000 
-        })),
-        customer_lifetime_value: 2450,
-        repeat_customer_rate: 0.72
+      // Fetch waitlist data
+      const { data: waitlistData2 } = await supabase
+        .from('waitlist')
+        .select('created_at, converted_at, cancelled_at')
+        .eq('cafe_id', cafe.id)
+        .gte('created_at', since);
+
+      const totalWaitlist = waitlistData2?.length || 0;
+      const converted = waitlistData2?.filter((w: Record<string, unknown>) => w.converted_at).length || 0;
+      const cancelled = waitlistData2?.filter((w: Record<string, unknown>) => w.cancelled_at && !w.converted_at).length || 0;
+      const conversionRate = totalWaitlist > 0 ? converted / totalWaitlist : 0;
+      const noShowRate = totalWaitlist > 0 ? cancelled / totalWaitlist : 0;
+
+      // Peak waitlist hours
+      const waitlistHours: Record<number, number> = {};
+      (waitlistData2 ?? []).forEach((w: Record<string, unknown>) => {
+        const h = new Date(w.created_at as string).getHours();
+        waitlistHours[h] = (waitlistHours[h] || 0) + 1;
       });
 
-      // Simulate waitlist data
       setWaitlistData({
-        total_waitlist_entries: 156,
-        average_wait_time_minutes: 18.5,
-        conversion_rate: 0.65,
-        no_show_rate: 0.15,
-        peak_waitlist_hours: [
-          { hour: 12, count: 28 },
-          { hour: 19, count: 32 },
-          { hour: 20, count: 25 }
-        ]
+        total_waitlist_entries: totalWaitlist,
+        average_wait_time_minutes: 0, // TODO: if waitlist has seated_at
+        conversion_rate: conversionRate,
+        no_show_rate: noShowRate,
+        peak_waitlist_hours: Object.entries(waitlistHours)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([hour, count]) => ({ hour: parseInt(hour), count }))
       });
 
-      // Fetch staff performance
-      const { data: staffData, error: staffError } = await supabase
+      // Fetch real staff performance from orders
+      const { data: staffData } = await supabase
         .from('cafe_staff')
-        .select(`
-          user_id,
-          profiles:user_id (full_name)
-        `)
+        .select('user_id, profiles:user_id(full_name)')
         .eq('cafe_id', cafe.id)
         .eq('status', 'active');
-      
-      if (!staffError && staffData) {
-        const performance = staffData.map((staff: Record<string, unknown>, index: number) => ({
-          staff_id: staff.user_id,
-          name: staff.profiles?.full_name || `Staff ${index + 1}`,
-          orders_handled: Math.floor(Math.random() * 50) + 10,
-          efficiency_score: Math.floor(Math.random() * 30) + 70,
-          avg_preparation_time_minutes: Math.floor(Math.random() * 10) + 10,
-          customer_rating: Math.floor(Math.random() * 20) + 80
+
+      if (staffData) {
+        const staffPerf = await Promise.all(staffData.map(async (staff: Record<string, unknown>) => {
+          const { data: staffOrders } = await supabase
+            .from('orders')
+            .select('id, accepted_at, ready_at')
+            .eq('cafe_id', cafe.id)
+            .eq('assignee', staff.user_id as string)
+            .gte('created_at', since)
+            .in('status', ['accepted', 'preparing', 'ready', 'completed']);
+
+          const staffPrepTimes: number[] = [];
+          (staffOrders ?? []).forEach((o: Record<string, unknown>) => {
+            if (o.accepted_at && o.ready_at) {
+              const mins = (new Date(o.ready_at as string).getTime() - new Date(o.accepted_at as string).getTime()) / 60000;
+              if (mins > 0 && mins < 120) staffPrepTimes.push(mins);
+            }
+          });
+          const staffAvgPrep = staffPrepTimes.length > 0
+            ? staffPrepTimes.reduce((a, b) => a + b, 0) / staffPrepTimes.length : 0;
+
+          return {
+            staff_id: staff.user_id as string,
+            name: (staff.profiles as Record<string, unknown>)?.full_name as string || 'Staff',
+            orders_handled: staffOrders?.length || 0,
+            efficiency_score: staffAvgPrep > 0 ? Math.max(0, Math.min(100, 100 - (staffAvgPrep - 10) * 3)) : 75,
+            avg_preparation_time_minutes: staffAvgPrep,
+            customer_rating: 0
+          };
         }));
-        setStaffPerformance(performance);
+        setStaffPerformance(staffPerf);
+      } else {
+        setStaffPerformance([]);
       }
 
     } catch (error) {
