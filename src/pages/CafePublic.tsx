@@ -1,25 +1,19 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, LogIn, UserPlus, Search } from "lucide-react";
-import { setActiveCafe } from "@/lib/cafeContext";
 import { Card } from "@/components/ui/card";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 
 /**
  * Public cafe entry — the single QR landing page.
- * Shows a branded splash (logo + banner + tabs preview) while we set up the
- * session, then redirects into the customer app.
+ * Validates the cafe exists, sets the active cafe context,
+ * then redirects guests directly into the customer app to browse freely.
+ * No sign-in required to browse. Orders trigger the account prompt.
  */
 export default function CafePublic() {
   const { slug, tableNo } = useParams<{ slug: string; tableNo?: string }>();
   const [error, setError] = useState<string | null>(null);
-  const [cafeName, setCafeName] = useState<string | null>(null);
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
-  const [needsChoice, setNeedsChoice] = useState(false);
-  const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
 
   const destination = tableNo ? "/app/menu" : "/app";
@@ -42,74 +36,24 @@ export default function CafePublic() {
         name: cafe.name,
         table: tableNo ? decodeURIComponent(tableNo) : null,
       });
-      setCafeName(cafe.name);
-      setLogoUrl(cafe.logo_url);
-      setBannerUrl(cafe.banner_url);
 
       const { data: { session } } = await supabase.auth.getSession();
       if (cancelled) return;
 
-      // If signed-in cafe owner scans, send them to dashboard.
+      // If signed in as a cafe owner, redirect them to their own dashboard.
       if (session?.user) {
         const { data: hasOwner } = await supabase.rpc("has_role", {
           _user_id: session.user.id, _role: "owner",
         });
         if (cancelled) return;
         if (hasOwner) { navigate("/dashboard", { replace: true }); return; }
-        // Already signed in as customer (or guest) — proceed.
-        navigate(destination, { replace: true });
-        return;
       }
 
-      // Not signed in — let the user choose how to continue.
-      setNeedsChoice(true);
+      // Not signed in as owner — let guests browse freely, no dialogs.
+      navigate(destination, { replace: true });
     })();
     return () => { cancelled = true; };
   }, [slug, tableNo, navigate, destination]);
-
-  const continueAsGuest = async () => {
-    setBusy(true);
-    await supabase.auth.signOut();
-    const { error: anonErr } = await supabase.auth.signInAnonymously();
-    if (anonErr) {
-      setBusy(false);
-      navigate(`/auth?returnTo=${encodeURIComponent(returnTo)}`, { replace: true });
-      return;
-    }
-    await new Promise<void>(resolve => {
-      const { data: stop } = supabase.auth.onAuthStateChange((event) => {
-        if (event === "SIGNED_IN") { stop?.unsubscribe(); resolve(); }
-      });
-      setTimeout(resolve, 800);
-    });
-    setBusy(false);
-    setTimeout(() => navigate(destination, { replace: true }), 200);
-  };
-
-  const browseMenu = async () => {
-    setBusy(true);
-    // signOut ensures a clean slate — clears any stale session so the
-    // anonymous sign-in below gets a fresh session tied to this tab.
-    await supabase.auth.signOut();
-    const { error: anonErr } = await supabase.auth.signInAnonymously();
-    if (anonErr) {
-      setBusy(false);
-      navigate(`/auth?returnTo=${encodeURIComponent(returnTo)}`, { replace: true });
-      return;
-    }
-    // Wait for the auth state to propagate to AuthProvider before navigating.
-    // Without this, the menu page loads before AuthProvider has set the user,
-    // causing RequireRole to redirect back to /auth.
-    await new Promise<void>(resolve => {
-      const { data: stop } = supabase.auth.onAuthStateChange((event) => {
-        if (event === "SIGNED_IN") { stop?.unsubscribe(); resolve(); }
-      });
-      // Safety valve: if SIGNED_IN already fired, resolve immediately
-      setTimeout(resolve, 800);
-    });
-    setBusy(false);
-    navigate(destination, { replace: true });
-  };
 
   const goAuth = (mode: "signin" | "signup") => {
     navigate(`/auth?mode=${mode}&returnTo=${encodeURIComponent(returnTo)}`, { replace: true });
@@ -127,48 +71,14 @@ export default function CafePublic() {
       </div>
     );
   }
+
+  // Loading state — brief flash while we check the cafe and auth.
   return (
     <div className="min-h-screen bg-gradient-hero">
-      <div className="relative h-48 sm:h-64 overflow-hidden bg-gradient-accent">
-        {bannerUrl && <img src={bannerUrl} alt="" className="w-full h-full object-cover opacity-90" />}
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-background/95" />
-      </div>
-      <div className="-mt-16 relative px-4 pb-10">
-        <Card className="max-w-md mx-auto p-8 text-center shadow-elegant">
-          {logoUrl ? (
-            <img src={logoUrl} alt={cafeName ?? "Cafe"} className="w-20 h-20 rounded-2xl mx-auto object-cover shadow-soft" />
-          ) : (
-            <div className="w-20 h-20 rounded-2xl mx-auto bg-accent-soft grid place-items-center text-3xl">☕</div>
-          )}
-          <h1 className="font-display text-2xl font-bold mt-4">{cafeName ?? "Loading…"}</h1>
-
-          {!needsChoice ? (
-            <>
-              <p className="text-sm text-muted-foreground mt-1">Welcome — preparing your experience</p>
-              <Loader2 className="w-5 h-5 animate-spin mx-auto mt-6 text-accent" />
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-muted-foreground mt-1">
-                {tableNo ? `You're at Table ${decodeURIComponent(tableNo)}. ` : ""}Browse the menu now — create an account when you're ready to order.
-              </p>
-              <div className="flex flex-col gap-2 mt-6">
-                <Button variant="hero" onClick={browseMenu} disabled={busy}>
-                  <Search className="w-4 h-4" /> Browse menu
-                </Button>
-                <Button variant="outline" onClick={() => goAuth("signup")} disabled={busy}>
-                  <UserPlus className="w-4 h-4" /> Create account & order
-                </Button>
-                <Button variant="ghost" onClick={() => goAuth("signin")} disabled={busy}>
-                  <LogIn className="w-3.5 h-3.5" /> Sign in to existing account
-                </Button>
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-4">
-                Sign in to keep your rewards and order history across devices.
-              </p>
-            </>
-          )}
-        </Card>
+      <div className="flex flex-col items-center justify-center min-h-screen px-4">
+        <div className="w-20 h-20 rounded-2xl bg-accent-soft grid place-items-center text-3xl mb-6">☕</div>
+        <p className="font-display text-2xl font-bold">{slug}</p>
+        <p className="text-sm text-muted-foreground mt-2">Opening the cafe for you…</p>
       </div>
     </div>
   );

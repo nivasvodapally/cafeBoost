@@ -8,7 +8,6 @@ import { RequireRole } from "@/components/RequireRole";
 import { RequireStaff } from "@/components/RequireStaff";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/hooks/useAuth";
-import { GuestSessionGuard } from "@/components/GuestSessionGuard";
 
 const CustomerLanding = lazy(() => import("./pages/CustomerLanding"));
 const Landing = lazy(() => import("./pages/Landing")); // SaaS landing for cafe owners
@@ -66,7 +65,6 @@ const App = () => (
       <HashRouter>
         <AuthProvider>
           <ErrorBoundary>
-            <GuestSessionGuard />
             <Suspense fallback={
               <div className="min-h-screen flex items-center justify-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />

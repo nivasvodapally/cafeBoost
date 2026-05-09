@@ -122,9 +122,13 @@ export default function CustomerMenu() {
   const [showAccountPrompt, setShowAccountPrompt] = useState(false);
 
   const submitOrder = async () => {
-    if (!cafe || !user || cart.length === 0 || ordering) return;
-    // profile === null means auth profile is still loading — wait for it
-    if (profile === undefined) return;
+    if (!cafe || cart.length === 0 || ordering) return;
+    if (!user) {
+      // No session at all — prompt to sign in
+      setShowAccountPrompt(true);
+      return;
+    }
+    if (profile === undefined) return; // still loading — wait
     if (profile?.is_guest) {
       setShowAccountPrompt(true);
       return;

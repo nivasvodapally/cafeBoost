@@ -58,7 +58,11 @@ export default function CustomerBook() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cafe || !user) return;
+    if (!cafe) return;
+    if (!user) {
+      setShowAccountPrompt(true);
+      return;
+    }
     if (profile?.is_guest) {
       setShowAccountPrompt(true);
       return;
