@@ -6,12 +6,9 @@ import { useAuth, type AppRole } from "@/hooks/useAuth";
 /**
  * Route guard — gates rendering on auth + role.
  *
- * - loading=true: show spinner (waiting for auth state to resolve).
- * - loading=false + no user: redirect to appropriate auth page.
- * - loading=false + customer role: ALWAYS pass through immediately.
- *   Customer/guest browsing must NEVER be blocked by loading/roles.
- *   Profile fetch is async; Menu.tsx handles is_guest check inline.
- * - loading=false + owner/staff: require hasRole(role) to be true.
+ * - Customer routes: always pass through. No blocking, no redirects.
+ *   Users browse freely. Auth check happens at action time (order placement).
+ * - Owner/staff routes: wait for auth to resolve, require hasRole(role).
  */
 export function RequireRole({
   role, children,
@@ -19,13 +16,8 @@ export function RequireRole({
   const { user, loading, hasRole } = useAuth();
   const location = useLocation();
 
-  // Customer routes: never block on loading or roles. Pass through immediately.
+  // Customer routes: pass through immediately — no auth gate for browsing.
   if (role === "customer") {
-    if (!user) {
-      // No user at all — redirect to sign in.
-      const returnTo = encodeURIComponent(location.pathname + location.search);
-      return <Navigate to={`/auth?returnTo=${returnTo}`} replace />;
-    }
     return <>{children}</>;
   }
 

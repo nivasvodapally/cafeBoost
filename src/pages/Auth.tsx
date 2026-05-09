@@ -5,10 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Logo } from "@/components/Logo";
-import { ArrowLeft, Loader2, Sparkles, Mail, ChevronDown } from "lucide-react";
+import { ArrowLeft, Loader2, Mail, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { signInAsGuest } from "@/hooks/useAuth";
 
 type Mode = "signin" | "signup" | "forgot";
 
@@ -16,8 +15,7 @@ type Mode = "signin" | "signup" | "forgot";
 const authRedirectUrl = (path: string) => `${window.location.origin}/#${path.startsWith("/") ? path : `/${path}`}`;
 
 /**
- * Customer-only auth page (/auth).
- * Includes a prominent "Continue as guest" path so customers can act without signing up.
+ * Customer auth page (/auth).
  * Owners should use /for-cafes/auth.
  */
 export default function Auth() {
@@ -30,7 +28,6 @@ export default function Auth() {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
-  const [guestLoading, setGuestLoading] = useState(false);
   const [magicLoading, setMagicLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [forgotSent, setForgotSent] = useState(false);
@@ -38,15 +35,13 @@ export default function Auth() {
   const [showEmail, setShowEmail] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => { document.title = "Sign in — CafeBoost"; }, []);
+  useEffect(() => { document.title = mode === "signup" ? "Create account — CafeBoost" : "Sign in — CafeBoost"; }, [mode]);
 
-  // Auto-redirect already-signed-in customers (but not anonymous guests).
+  // Auto-redirect already-signed-in customers to the returnTo destination.
   useEffect(() => {
     let cancel = false;
     void supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (cancel || !session?.user) return;
-      const isAnon = (session.user as { is_anonymous?: boolean }).is_anonymous;
-      if (isAnon) return; // let guest stay on auth page if they want to claim
       const { data: hasOwner } = await supabase.rpc("has_role", {
         _user_id: session.user.id, _role: "owner",
       });
@@ -60,27 +55,6 @@ export default function Auth() {
     });
     return () => { cancel = true; };
   }, [navigate, returnTo]);
-
-  const onContinueAsGuest = async () => {
-    setGuestLoading(true); setError(null);
-    await supabase.auth.signOut();
-    const { error: err } = await signInAsGuest();
-    if (err) { setGuestLoading(false); setError(err.message); return; }
-    // Wait for the full auth handshake to complete:
-    // 1. Supabase fires SIGNED_IN
-    // 2. AuthProvider's onAuthStateChange runs (sets user + schedules profile fetch)
-    // 3. Profile fetch resolves (makes isGuest reliable)
-    // Add a delay so the setTimeout in AuthProvider (which defers profile fetch) also runs.
-    await new Promise<void>((resolve) => {
-      const { data: stop } = supabase.auth.onAuthStateChange((event) => {
-        if (event === "SIGNED_IN") { stop?.unsubscribe(); resolve(); }
-      });
-      setTimeout(resolve, 1000); // give profile fetch time to complete too
-    });
-    setGuestLoading(false);
-    toast.success("You're in - explore as a guest");
-    navigate(returnTo);
-  };
 
   const onMagicLink = async () => {
     if (!email.trim()) { setError("Enter your email to get a magic link."); return; }
@@ -195,34 +169,7 @@ export default function Auth() {
                 {mode === "signin" ? "Order, book a table & track your rewards." : "Earn rewards at your favorite cafes."}
               </p>
 
-              {/* Guest CTA - primary fast path */}
-              <Button onClick={onContinueAsGuest} variant="hero" size="lg" className="w-full mt-6 gap-2" disabled={guestLoading}>
-                {guestLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Sparkles className="w-4 h-4" /> Continue as guest</>}
-              </Button>
-              <p className="text-xs text-muted-foreground text-center mt-2">
-                Browse, order, and book - no signup. Upgrade anytime.
-              </p>
-              {error && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2 mt-3">{error}</p>}
-
-              <div className="relative my-5">
-                <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border" /></div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">or</span>
-                </div>
-              </div>
-
-              {/* Secondary: email — collapsed by default to declutter */}
-              {!showEmail ? (
-                <button
-                  type="button"
-                  onClick={() => setShowEmail(true)}
-                  className="mt-4 w-full text-sm text-muted-foreground hover:text-foreground inline-flex items-center justify-center gap-1.5 py-2"
-                >
-                  <Mail className="w-3.5 h-3.5" /> Use email instead
-                  <ChevronDown className="w-3.5 h-3.5" />
-                </button>
-              ) : (
-              <>
+              {/* Email form — shown by default */}
               <div className="relative my-5">
                 <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border" /></div>
                 <div className="relative flex justify-center text-xs uppercase">
@@ -260,7 +207,7 @@ export default function Auth() {
                 </div>
                 {error && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</p>}
                 {magicSent && <p className="text-sm text-success bg-success/10 rounded-lg px-3 py-2">Magic link sent! Check {email}.</p>}
-                <Button type="submit" className="w-full" size="lg" disabled={loading}>
+                <Button type="submit" variant="hero" className="w-full" size="lg" disabled={loading}>
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : mode === "signin" ? "Sign in" : "Create account"}
                 </Button>
                 {mode === "signin" && (
@@ -276,8 +223,6 @@ export default function Auth() {
                   {mode === "signin" ? "Create account" : "Sign in"}
                 </button>
               </p>
-              </>
-              )}
 
               <div className="mt-6 pt-6 border-t border-border text-center text-xs text-muted-foreground">
                 Cafe owner?{" "}

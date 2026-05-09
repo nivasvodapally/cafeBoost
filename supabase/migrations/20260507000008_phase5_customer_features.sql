@@ -314,7 +314,7 @@ RETURNS TABLE (
     menu_item_id UUID,
     item_name TEXT,
     item_description TEXT,
-    item_price INTEGER,
+    item_price NUMERIC,
     item_image_url TEXT,
     category TEXT,
     added_at TIMESTAMPTZ,

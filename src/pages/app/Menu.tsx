@@ -4,7 +4,7 @@ import { CustomerLayout } from "@/components/CustomerLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Plus, Minus, Search, UtensilsCrossed, Trash2, Lock, Heart, LogIn } from "lucide-react";
+import { Loader2, Plus, Minus, Search, UtensilsCrossed, Trash2, Lock, Heart } from "lucide-react";
 import { useActiveCafe, setActiveTable } from "@/lib/cafeContext";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -119,18 +119,10 @@ export default function CustomerMenu() {
     }
   };
 
-  const [showAccountPrompt, setShowAccountPrompt] = useState(false);
-
   const submitOrder = async () => {
     if (!cafe || cart.length === 0 || ordering) return;
     if (!user) {
-      // No session at all — prompt to sign in
-      setShowAccountPrompt(true);
-      return;
-    }
-    if (profile === undefined) return; // still loading — wait
-    if (profile?.is_guest) {
-      setShowAccountPrompt(true);
+      navigate(`/auth?mode=signup&returnTo=${encodeURIComponent(`/app/menu`)}`);
       return;
     }
     setOrdering(true);
@@ -287,33 +279,7 @@ export default function CustomerMenu() {
         </div>
       )}
 
-      {/* Account prompt for guests trying to place orders */}
-      {showAccountPrompt && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
-          <Card className="m-4 max-w-sm w-full p-6 shadow-elegant">
-            <div className="text-center space-y-4">
-              <div className="w-14 h-14 rounded-full bg-accent-soft grid place-items-center mx-auto">
-                <LogIn className="w-7 h-7 text-accent" />
-              </div>
-              <div>
-                <p className="font-display text-xl font-bold">Create an account to order</p>
-                <p className="text-sm text-muted-foreground mt-1">Browse the menu freely — but to place orders, you need a free account. It takes 30 seconds.</p>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Button variant="hero" onClick={() => navigate("/auth?mode=signup")}>
-                  Create free account
-                </Button>
-                <Button variant="outline" onClick={() => navigate("/auth?mode=signin")}>
-                  Sign in with existing account
-                </Button>
-                <Button variant="ghost" onClick={() => setShowAccountPrompt(false)} className="text-sm">
-                  Keep browsing
-                </Button>
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
+      {/* Place Order button — auth check happens in submitOrder */}
 
       {newOrder && (
         <PaymentDialog

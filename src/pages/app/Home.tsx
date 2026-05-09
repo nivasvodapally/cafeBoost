@@ -11,7 +11,7 @@ import { CustomerFavoritesService } from "@/services/customerFavoritesService";
 
 type Featured = { id: string; name: string; price: number; description: string | null; category: string };
 type RecentOrder = { id: string; total_amount: number; status: string; created_at: string };
-type FavoriteMenuItem = { id: string; menu_item_id: string; menu_item_name: string; menu_item_price: number; notes: string | null; created_at: string };
+type FavoriteMenuItem = { id: string; menu_item_id: string; item_name: string; item_price: number; notes: string | null; added_at: string };
 
 export default function CustomerHome() {
   const cafe = useActiveCafe();
@@ -56,7 +56,6 @@ export default function CustomerHome() {
   if (!cafe) return null;
   if (loading) return <CustomerLayout><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin" /></div></CustomerLayout>;
 
-  const isGuest = profile?.is_guest === true;
   const firstName = profile?.full_name?.split(" ")[0];
 
   return (
@@ -67,16 +66,6 @@ export default function CustomerHome() {
           <h1 className="font-display text-2xl sm:text-3xl font-bold mt-1">{cafe.name} ☕</h1>
           <p className="mt-1 text-sm opacity-80">{firstName ? `Hi ${firstName} — ` : ""}browse the menu, book a table, or check your rewards.</p>
         </Card>
-
-        {isGuest && (
-          <Card className="p-4 border-accent/40 bg-accent-soft/40 flex items-center justify-between gap-3 flex-wrap">
-            <div>
-              <p className="text-sm font-semibold">You're browsing as a guest</p>
-              <p className="text-xs text-muted-foreground">Create a free account when you're ready to order — no rush.</p>
-            </div>
-            <Link to="/auth?mode=signup"><Button variant="hero" size="sm">Create account</Button></Link>
-          </Card>
-        )}
 
         {m && (
           <Card className="p-5 flex items-center justify-between">
@@ -142,8 +131,8 @@ export default function CustomerHome() {
                 <Link to="/app/menu" key={fav.id}>
                   <Card className="p-4 h-full hover:shadow-soft transition-smooth">
                     <p className="text-xs uppercase tracking-wider text-muted-foreground">Favorite</p>
-                    <p className="text-sm font-semibold mt-1 line-clamp-1">{fav.menu_item_name}</p>
-                    <p className="text-sm font-bold mt-2">₹{Number(fav.menu_item_price).toFixed(2)}</p>
+                    <p className="text-sm font-semibold mt-1 line-clamp-1">{fav.item_name}</p>
+                    <p className="text-sm font-bold mt-2">₹{Number(fav.item_price).toFixed(2)}</p>
                     {fav.notes && <p className="text-xs text-muted-foreground mt-1 line-clamp-1">"{fav.notes}"</p>}
                   </Card>
                 </Link>

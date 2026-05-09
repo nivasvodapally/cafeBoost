@@ -27,6 +27,14 @@ export type PlaceOrderInput = {
 
 const recentSubmits = new Map<string, number>();
 const SUBMIT_DEDUPE_MS = 4000;
+const CLEANUP_INTERVAL_MS = 60_000;
+
+setInterval(() => {
+  const cutoff = Date.now() - SUBMIT_DEDUPE_MS * 10;
+  for (const [k, t] of recentSubmits) {
+    if (t < cutoff) recentSubmits.delete(k);
+  }
+}, CLEANUP_INTERVAL_MS);
 
 function cartKey(input: PlaceOrderInput) {
   const sig = input.cart.map((c) => `${c.id}x${c.qty}`).sort().join("|");
@@ -54,7 +62,6 @@ export async function placeOrder(input: PlaceOrderInput) {
       _source: input.source ?? "app",
       _table_no: input.tableNo ?? null,
       _items: items,
-      _login_session: input.loginSession ?? null,
     });
     if (error) throw error;
     const r = data as { id: string; subtotal: number; tax_amount: number; total_amount: number; earned_points: number };

@@ -8,13 +8,13 @@ import { RequireRole } from "@/components/RequireRole";
 import { RequireStaff } from "@/components/RequireStaff";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/hooks/useAuth";
+import { GuestSessionGuard } from "@/components/GuestSessionGuard";
 
 const CustomerLanding = lazy(() => import("./pages/CustomerLanding"));
 const Landing = lazy(() => import("./pages/Landing")); // SaaS landing for cafe owners
 const Auth = lazy(() => import("./pages/Auth")); // customer auth
 const OwnerAuth = lazy(() => import("./pages/OwnerAuth"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
-const ClaimAccount = lazy(() => import("./pages/ClaimAccount"));
 const Discover = lazy(() => import("./pages/Discover"));
 const CafePublic = lazy(() => import("./pages/CafePublic"));
 const OwnerSetup = lazy(() => import("./pages/OwnerSetup"));
@@ -64,6 +64,7 @@ const App = () => (
       <Sonner position="top-right" richColors closeButton />
       <HashRouter>
         <AuthProvider>
+          <GuestSessionGuard />
           <ErrorBoundary>
             <Suspense fallback={
               <div className="min-h-screen flex items-center justify-center">
@@ -78,7 +79,6 @@ const App = () => (
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/staff/join" element={<StaffJoin />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
-                <Route path="/claim-account" element={<ClaimAccount />} />
                 <Route path="/discover" element={<Discover />} />
                 <Route path="/cafe/:slug" element={<CafePublic />} />
                 <Route path="/cafe/:slug/table/:tableNo" element={<CafePublic />} />

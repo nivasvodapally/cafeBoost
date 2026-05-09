@@ -154,7 +154,7 @@ export default function CustomerOrders() {
         category: "Order History",
         available: true
       }));
-      localStorage.setItem(`cafeboost:cart:${o.cafe_id}`, JSON.stringify(cart));
+      localStorage.setItem(`cafeboost:cart:${cafe.id}`, JSON.stringify(cart));
       toast.success(`Added items to cart`);
       navigate("/app/menu");
     } catch (e) {

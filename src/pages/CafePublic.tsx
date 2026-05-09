@@ -4,12 +4,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
+import { setActiveCafe } from "@/lib/cafeContext";
 
 /**
  * Public cafe entry — the single QR landing page.
  * Validates the cafe exists, sets the active cafe context,
- * then redirects guests directly into the customer app to browse freely.
- * No sign-in required to browse. Orders trigger the account prompt.
+ * then routes the user to the customer app.
+ * - Owners are redirected to their dashboard.
+ * - Customers and anonymous users land on /app (or /app/menu for table scans).
+ * Browsing is unrestricted; orders require a signed-in account.
  */
 export default function CafePublic() {
   const { slug, tableNo } = useParams<{ slug: string; tableNo?: string }>();
@@ -17,19 +20,21 @@ export default function CafePublic() {
   const navigate = useNavigate();
 
   const destination = tableNo ? "/app/menu" : "/app";
-  const returnTo = `/cafe/${slug}${tableNo ? `/table/${tableNo}` : ""}`;
 
   useEffect(() => {
     if (!slug) return;
     let cancelled = false;
+
     void (async () => {
       const { data: cafe } = await supabase
         .from("cafes")
         .select("id, slug, name, logo_url, banner_url")
         .eq("slug", slug)
         .maybeSingle();
+
       if (cancelled) return;
       if (!cafe) { setError("Cafe not found."); return; }
+
       setActiveCafe({
         id: cafe.id,
         slug: cafe.slug,
@@ -40,22 +45,25 @@ export default function CafePublic() {
       const { data: { session } } = await supabase.auth.getSession();
       if (cancelled) return;
 
-      // If signed in as a cafe owner, redirect them to their own dashboard.
+      // Redirect owners to their dashboard.
       if (session?.user) {
         const { data: hasOwner } = await supabase.rpc("has_role", {
-          _user_id: session.user.id, _role: "owner",
+          _user_id: session.user.id,
+          _role: "owner",
         });
         if (cancelled) return;
         if (hasOwner) { navigate("/dashboard", { replace: true }); return; }
       }
 
-      // Not signed in as owner — let guests browse freely, no dialogs.
+      // Customers and anonymous users land on the customer app.
       navigate(destination, { replace: true });
     })();
+
     return () => { cancelled = true; };
   }, [slug, tableNo, navigate, destination]);
 
   const goAuth = (mode: "signin" | "signup") => {
+    const returnTo = `/cafe/${slug}${tableNo ? `/table/${tableNo}` : ""}`;
     navigate(`/auth?mode=${mode}&returnTo=${encodeURIComponent(returnTo)}`, { replace: true });
   };
 
@@ -72,7 +80,6 @@ export default function CafePublic() {
     );
   }
 
-  // Loading state — brief flash while we check the cafe and auth.
   return (
     <div className="min-h-screen bg-gradient-hero">
       <div className="flex flex-col items-center justify-center min-h-screen px-4">

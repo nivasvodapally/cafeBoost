@@ -119,14 +119,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRoles((roleRows ?? []).map((r) => r.role).filter(isAppRole));
   };
 
-  const isGuest = Boolean(
-    (user as User & { is_anonymous?: boolean } | null)?.is_anonymous
-    ?? profile?.is_guest
-    ?? false
-  );
-
   const value: AuthState = {
-    session, user, profile, roles, loading, isGuest, loginSession, refreshProfile,
+    session, user, profile, roles, loading,
+    isGuest: false,
+    loginSession, refreshProfile,
     hasRole: (role) => roles.includes(role),
   };
 
@@ -142,39 +138,4 @@ export function useAuth(): AuthState {
 export async function signOut() {
   await supabase.auth.signOut();
   setActiveCafe(null);
-}
-
-/** Start (or reuse) a guest session. */
-export async function signInAsGuest(opts?: { fullName?: string; phone?: string }) {
-  const { data: existing } = await supabase.auth.getSession();
-  if (existing.session?.user) return { user: existing.session.user, error: null };
-  const meta: Record<string, string> = { role: "customer" };
-  if (opts?.fullName) meta.full_name = opts.fullName;
-  if (opts?.phone) meta.phone = opts.phone;
-  const { data, error } = await supabase.auth.signInAnonymously({ options: { data: meta } });
-  return { user: data.user, error };
-}
-
-export async function claimGuestAccount(args: {
-  email: string;
-  password: string;
-  fullName?: string;
-}) {
-  const updates: Parameters<typeof supabase.auth.updateUser>[0] = {
-    email: args.email.trim(),
-    password: args.password,
-    data: args.fullName ? { full_name: args.fullName } : undefined,
-  };
-  const { data, error } = await supabase.auth.updateUser(updates);
-  if (error || !data.user) return { user: data.user, error };
-  await supabase.auth.refreshSession();
-  const profileUpdates = {
-    is_guest: false,
-    claimed_at: new Date().toISOString(),
-    email: args.email.trim(),
-    ...(args.fullName?.trim() ? { full_name: args.fullName.trim() } : {}),
-  };
-  const { error: pErr } = await supabase.from("profiles").update(profileUpdates).eq("user_id", data.user.id);
-  if (pErr) console.warn("Profile update after claim failed:", pErr);
-  return { user: data.user, error: null };
 }

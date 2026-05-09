@@ -1,3 +1,4 @@
+Initialising login role...
 export type Json =
   | string
   | number
@@ -11,6 +12,31 @@ export type Database = {
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -170,6 +196,7 @@ export type Database = {
           full_name: string | null
           id: string
           joined_at: string
+          on_break: boolean
           role: Database["public"]["Enums"]["app_role"]
           status: string
           updated_at: string
@@ -182,6 +209,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           joined_at?: string
+          on_break?: boolean
           role: Database["public"]["Enums"]["app_role"]
           status?: string
           updated_at?: string
@@ -194,6 +222,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           joined_at?: string
+          on_break?: boolean
           role?: Database["public"]["Enums"]["app_role"]
           status?: string
           updated_at?: string
@@ -272,6 +301,7 @@ export type Database = {
           feedback_thank_you_message: string | null
           gstin: string | null
           id: string
+          kds_enabled: boolean | null
           kds_pairing_code: string | null
           kds_pairing_code_set_at: string | null
           kds_pin_hash: string | null
@@ -298,6 +328,7 @@ export type Database = {
           sound_alerts_enabled: boolean
           split_bill_enabled: boolean | null
           staff_metrics_enabled: boolean | null
+          staff_runner_enabled: boolean | null
           state: string | null
           stuck_kitchen_minutes: number
           stuck_ready_minutes: number
@@ -330,6 +361,7 @@ export type Database = {
           feedback_thank_you_message?: string | null
           gstin?: string | null
           id?: string
+          kds_enabled?: boolean | null
           kds_pairing_code?: string | null
           kds_pairing_code_set_at?: string | null
           kds_pin_hash?: string | null
@@ -356,6 +388,7 @@ export type Database = {
           sound_alerts_enabled?: boolean
           split_bill_enabled?: boolean | null
           staff_metrics_enabled?: boolean | null
+          staff_runner_enabled?: boolean | null
           state?: string | null
           stuck_kitchen_minutes?: number
           stuck_ready_minutes?: number
@@ -388,6 +421,7 @@ export type Database = {
           feedback_thank_you_message?: string | null
           gstin?: string | null
           id?: string
+          kds_enabled?: boolean | null
           kds_pairing_code?: string | null
           kds_pairing_code_set_at?: string | null
           kds_pin_hash?: string | null
@@ -414,6 +448,7 @@ export type Database = {
           sound_alerts_enabled?: boolean
           split_bill_enabled?: boolean | null
           staff_metrics_enabled?: boolean | null
+          staff_runner_enabled?: boolean | null
           state?: string | null
           stuck_kitchen_minutes?: number
           stuck_ready_minutes?: number
@@ -2051,6 +2086,15 @@ export type Database = {
         }
         Returns: string
       }
+      adjust_loyalty_points: {
+        Args: {
+          _cafe_id: string
+          _customer_user_id: string
+          _note?: string
+          _points: number
+        }
+        Returns: undefined
+      }
       advance_order_workflow: {
         Args: {
           _next_status: Database["public"]["Enums"]["order_status"]
@@ -2064,6 +2108,16 @@ export type Database = {
       }
       approve_redemption_by_code: {
         Args: { _cafe_id: string; _code: string }
+        Returns: Json
+      }
+      call_staff: {
+        Args: {
+          _cafe_id: string
+          _customer_name: string
+          _message?: string
+          _order_id: string
+          _table_no: string
+        }
         Returns: Json
       }
       can_modify_order: { Args: { order_id: string }; Returns: boolean }
@@ -2100,7 +2154,9 @@ export type Database = {
       }
       cleanup_old_analytics_data: { Args: never; Returns: number }
       clock_in: { Args: never; Returns: Json }
-      clock_out: { Args: { _notes?: string }; Returns: Json }
+      clock_out:
+        | { Args: never; Returns: Json }
+        | { Args: { _notes?: string }; Returns: Json }
       close_cash_drawer: {
         Args: {
           _cafe_id: string
@@ -2615,6 +2671,7 @@ export type Database = {
         Args: { _method: string; _order_id: string }
         Returns: undefined
       }
+      set_staff_break: { Args: { _on_break: boolean }; Returns: undefined }
       simulate_payment: {
         Args: { _order_id: string; _outcome: string }
         Returns: Json
@@ -2818,6 +2875,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: [
@@ -2873,3 +2933,4 @@ export const Constants = {
     },
   },
 } as const
+<claude-code-hint v="1" type="plugin" value="supabase@claude-plugins-official" />

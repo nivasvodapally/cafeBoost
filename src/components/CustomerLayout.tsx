@@ -1,5 +1,5 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { Home, UtensilsCrossed, Calendar, CalendarCheck, Gift, ClipboardList, User, LogOut, Coffee, ChevronDown, Sparkles, X, Heart } from "lucide-react";
+import { Home, UtensilsCrossed, CalendarCheck, Gift, ClipboardList, User, LogOut, Coffee, ChevronDown, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Logo } from "./Logo";
 import { Button } from "./ui/button";
@@ -15,31 +15,15 @@ const nav = [
   { to: "/app/profile", label: "Profile", icon: User },
 ];
 
-const GUEST_BANNER_DISMISS_KEY = "cafeboost:guest-banner-dismissed";
-
 export function CustomerLayout({
   children, title, subtitle, action,
 }: { children: ReactNode; title?: string; subtitle?: string; action?: ReactNode }) {
-  const { profile, isGuest } = useAuth();
+  const { user, profile } = useAuth();
   const cafe = useActiveCafe();
   const navigate = useNavigate();
-  const [bannerDismissed, setBannerDismissed] = useState(true);
 
-  useEffect(() => {
-    // Persisted in localStorage so once the guest dismisses, it stays dismissed
-    // across browser sessions (not just this tab).
-    setBannerDismissed(typeof window !== "undefined" && localStorage.getItem(GUEST_BANNER_DISMISS_KEY) === "1");
-  }, []);
-
-  const dismissBanner = () => {
-    localStorage.setItem(GUEST_BANNER_DISMISS_KEY, "1");
-    setBannerDismissed(true);
-  };
-
-  const onLogout = async () => { await signOut(); navigate("/auth"); };
+  const onLogout = async () => { await signOut(); navigate("/discover"); };
   const switchCafe = () => { setActiveCafe(null); navigate("/discover"); };
-
-  const showGuestBanner = isGuest && !bannerDismissed;
 
   return (
     <div className="min-h-screen bg-gradient-hero pb-24 lg:pb-8">
@@ -62,29 +46,23 @@ export function CustomerLayout({
             </span>
           )}
           <div className="ml-auto flex items-center gap-2">
-            <span className="text-sm text-muted-foreground hidden sm:inline">
-              Hi, {profile?.full_name?.split(" ")[0] ?? (isGuest ? "guest" : "there")}
-            </span>
-            <Button variant="ghost" size="icon" onClick={onLogout} aria-label="Sign out">
-              <LogOut className="w-4 h-4" />
-            </Button>
+            {user ? (
+              <>
+                <span className="text-sm text-muted-foreground hidden sm:inline">
+                  Hi, {profile?.full_name?.split(" ")[0] ?? "there"}
+                </span>
+                <Button variant="ghost" size="icon" onClick={onLogout} aria-label="Sign out">
+                  <LogOut className="w-4 h-4" />
+                </Button>
+              </>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => navigate("/auth?mode=signin")}>
+                Sign in
+              </Button>
+            )}
           </div>
         </div>
       </header>
-
-      {showGuestBanner && (
-        <div className="bg-accent-soft border-b border-accent/20">
-          <div className="max-w-3xl mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-3">
-            <Sparkles className="w-4 h-4 text-accent shrink-0" />
-            <p className="text-sm text-accent-foreground flex-1 min-w-0">
-              You're browsing as a guest. <Link to="/claim-account" className="font-semibold underline">Save your rewards →</Link>
-            </p>
-            <button onClick={dismissBanner} aria-label="Dismiss" className="text-accent-foreground/60 hover:text-accent-foreground">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-6">
         {(title || action) && (

@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, CalendarCheck, AlertCircle, Clock, Users, LogIn } from "lucide-react";
+import { Loader2, CalendarCheck, AlertCircle, Clock, Users } from "lucide-react";
 import { useActiveCafe } from "@/lib/cafeContext";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -29,7 +29,6 @@ export default function CustomerBook() {
   const [phone, setPhone] = useState(profile?.phone ?? "");
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
-  const [showAccountPrompt, setShowAccountPrompt] = useState(false);
   const [bookingType, setBookingType] = useState<"confirmed" | "waitlist">("confirmed");
   const [openingHours, setOpeningHours] = useState<Record<string, { open: string; close: string; closed?: boolean }> | null>(null);
   const [slotInfo, setSlotInfo] = useState<{ remaining: number; capacity: number } | null>(null);
@@ -60,11 +59,7 @@ export default function CustomerBook() {
     e.preventDefault();
     if (!cafe) return;
     if (!user) {
-      setShowAccountPrompt(true);
-      return;
-    }
-    if (profile?.is_guest) {
-      setShowAccountPrompt(true);
+      navigate(`/auth?mode=signup&returnTo=${encodeURIComponent("/app/book")}`);
       return;
     }
     if (inlineError) { toast.error(inlineError); return; }
@@ -234,33 +229,6 @@ export default function CustomerBook() {
         </form>
       </Card>
 
-      {/* Account prompt for guests trying to book */}
-      {showAccountPrompt && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm">
-          <Card className="m-4 max-w-sm w-full p-6 shadow-elegant">
-            <div className="text-center space-y-4">
-              <div className="w-14 h-14 rounded-full bg-accent-soft grid place-items-center mx-auto">
-                <LogIn className="w-7 h-7 text-accent" />
-              </div>
-              <div>
-                <p className="font-display text-xl font-bold">Create an account to book</p>
-                <p className="text-sm text-muted-foreground mt-1">Browse the menu freely — but to book a table, you need a free account. It takes 30 seconds.</p>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Button variant="hero" onClick={() => navigate("/auth?mode=signup")}>
-                  Create free account
-                </Button>
-                <Button variant="outline" onClick={() => navigate("/auth?mode=signin")}>
-                  Sign in with existing account
-                </Button>
-                <Button variant="ghost" onClick={() => setShowAccountPrompt(false)} className="text-sm">
-                  Keep browsing
-                </Button>
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
-    </CustomerLayout>
+      </CustomerLayout>
   );
 }
