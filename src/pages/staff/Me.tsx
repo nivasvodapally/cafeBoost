@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
-import { Award, ChefHat, ClipboardCheck, Clock, Loader2, Users } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { AlertCircle, Award, ChefHat, ClipboardCheck, Clock, Loader2, Users } from "lucide-react";
 import { StaffLayout } from "@/components/StaffLayout";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useStaffCafe } from "@/hooks/useStaffCafe";
+import { signOut } from "@/hooks/useAuth";
 
 type Stats = {
   orders_accepted: number; orders_prepared: number; orders_served: number; orders_completed: number;
@@ -14,7 +17,8 @@ const fmtMin = (s: number) => s ? `${Math.round(s / 60)} min` : "—";
 const fmtHrs = (h: number) => `${Number(h).toFixed(1)} h`;
 
 export default function StaffMe() {
-  const { cafe } = useStaffCafe();
+  const { cafe, assignment, loading: cafeLoading } = useStaffCafe();
+  const navigate = useNavigate();
   const [days, setDays] = useState(7);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,7 +33,26 @@ export default function StaffMe() {
     return () => { cancelled = true; };
   }, [days]);
 
-  if (loading || !stats) return <StaffLayout title="My stats"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div></StaffLayout>;
+  if (cafeLoading) return <StaffLayout title="My stats"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div></StaffLayout>;
+
+  if (!assignment) {
+    return (
+      <StaffLayout title="My stats" subtitle="Not assigned to any cafe">
+        <Card className="p-10 text-center">
+          <AlertCircle className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+          <p className="font-display text-xl font-bold">Not assigned to a cafe</p>
+          <p className="text-sm text-muted-foreground mt-2">
+            Your account is not linked to any cafe. Contact the cafe owner for a staff invite.
+          </p>
+          <Button variant="hero" className="mt-4" onClick={async () => { await signOut(); navigate("/staff/join"); }}>
+            Leave portal
+          </Button>
+        </Card>
+      </StaffLayout>
+    );
+  }
+
+  if (!stats) return <StaffLayout title="My stats"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div></StaffLayout>;
 
   const cards = [
     { label: "Orders accepted", value: stats.orders_accepted, icon: ClipboardCheck },

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, LogIn, UserPlus, Sparkles } from "lucide-react";
+import { Loader2, LogIn, UserPlus, Search } from "lucide-react";
 import { setActiveCafe } from "@/lib/cafeContext";
 import { Card } from "@/components/ui/card";
 import { Logo } from "@/components/Logo";
@@ -69,13 +69,46 @@ export default function CafePublic() {
 
   const continueAsGuest = async () => {
     setBusy(true);
+    await supabase.auth.signOut();
     const { error: anonErr } = await supabase.auth.signInAnonymously();
     if (anonErr) {
       setBusy(false);
       navigate(`/auth?returnTo=${encodeURIComponent(returnTo)}`, { replace: true });
       return;
     }
-    setTimeout(() => navigate(destination, { replace: true }), 400);
+    await new Promise<void>(resolve => {
+      const { data: stop } = supabase.auth.onAuthStateChange((event) => {
+        if (event === "SIGNED_IN") { stop?.unsubscribe(); resolve(); }
+      });
+      setTimeout(resolve, 800);
+    });
+    setBusy(false);
+    setTimeout(() => navigate(destination, { replace: true }), 200);
+  };
+
+  const browseMenu = async () => {
+    setBusy(true);
+    // signOut ensures a clean slate — clears any stale session so the
+    // anonymous sign-in below gets a fresh session tied to this tab.
+    await supabase.auth.signOut();
+    const { error: anonErr } = await supabase.auth.signInAnonymously();
+    if (anonErr) {
+      setBusy(false);
+      navigate(`/auth?returnTo=${encodeURIComponent(returnTo)}`, { replace: true });
+      return;
+    }
+    // Wait for the auth state to propagate to AuthProvider before navigating.
+    // Without this, the menu page loads before AuthProvider has set the user,
+    // causing RequireRole to redirect back to /auth.
+    await new Promise<void>(resolve => {
+      const { data: stop } = supabase.auth.onAuthStateChange((event) => {
+        if (event === "SIGNED_IN") { stop?.unsubscribe(); resolve(); }
+      });
+      // Safety valve: if SIGNED_IN already fired, resolve immediately
+      setTimeout(resolve, 800);
+    });
+    setBusy(false);
+    navigate(destination, { replace: true });
   };
 
   const goAuth = (mode: "signin" | "signup") => {
@@ -117,23 +150,18 @@ export default function CafePublic() {
           ) : (
             <>
               <p className="text-sm text-muted-foreground mt-1">
-                {tableNo ? `You're at Table ${decodeURIComponent(tableNo)}. ` : ""}How would you like to continue?
+                {tableNo ? `You're at Table ${decodeURIComponent(tableNo)}. ` : ""}Browse the menu now — create an account when you're ready to order.
               </p>
               <div className="flex flex-col gap-2 mt-6">
-                <Button variant="hero" onClick={() => goAuth("signin")} disabled={busy}>
-                  <LogIn className="w-4 h-4" /> Sign in to existing account
+                <Button variant="hero" onClick={browseMenu} disabled={busy}>
+                  <Search className="w-4 h-4" /> Browse menu
                 </Button>
                 <Button variant="outline" onClick={() => goAuth("signup")} disabled={busy}>
-                  <UserPlus className="w-4 h-4" /> Create a new account
+                  <UserPlus className="w-4 h-4" /> Create account & order
                 </Button>
-                <button
-                  onClick={continueAsGuest}
-                  disabled={busy}
-                  className="text-sm text-muted-foreground hover:text-foreground mt-2 inline-flex items-center justify-center gap-1.5"
-                >
-                  {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                  Continue as guest
-                </button>
+                <Button variant="ghost" onClick={() => goAuth("signin")} disabled={busy}>
+                  <LogIn className="w-3.5 h-3.5" /> Sign in to existing account
+                </Button>
               </div>
               <p className="text-[11px] text-muted-foreground mt-4">
                 Sign in to keep your rewards and order history across devices.

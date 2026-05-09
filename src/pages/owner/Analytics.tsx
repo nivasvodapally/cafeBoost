@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentType } from "react";
+import { useEffect, useState, useCallback, type ComponentType } from "react";
 import { OwnerLayout } from "@/components/OwnerLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -66,7 +66,7 @@ export default function OwnerAnalytics() {
   const [staffPerformance, setStaffPerformance] = useState<StaffPerformance[]>([]);
   const [exporting, setExporting] = useState(false);
 
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = useCallback(async () => {
     if (!cafe?.id) return;
 
     setLoading(true);
@@ -81,7 +81,7 @@ export default function OwnerAnalytics() {
       // Fetch completed orders for the period
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
-        .select('total_amount, created_at, status, payment_method, payment_status, refunded_at, accepted_at, preparing_at, ready_at, completed_at')
+        .select('total_amount, created_at, status, payment_method, payment_status, refunded_at, accepted_at, preparing_at, ready_at, completed_at, customer_user_id')
         .eq('cafe_id', cafe.id)
         .gte('created_at', since)
         .eq('status', 'completed');
@@ -130,6 +130,17 @@ export default function OwnerAnalytics() {
         revenueByMethod[m] = (revenueByMethod[m] || 0) + ((o.total_amount as number) || 0);
       });
 
+      // Repeat customer rate: customers with more than 1 completed order / total unique customers
+      const customerOrderCounts: Record<string, number> = {};
+      (ordersData ?? []).forEach((o: Record<string, unknown>) => {
+        const cid = o.customer_user_id as string | null;
+        if (cid) customerOrderCounts[cid] = (customerOrderCounts[cid] || 0) + 1;
+      });
+      const uniqueCustomers = Object.keys(customerOrderCounts).length;
+      const repeatCustomers = Object.values(customerOrderCounts).filter(c => c > 1).length;
+      const repeatCustomerRate = uniqueCustomers > 0 ? repeatCustomers / uniqueCustomers : 0;
+      const customerLifetimeValue = uniqueCustomers > 0 ? totalRevenue / uniqueCustomers : 0;
+
       setFinancialData({
         revenue_trend: 0, // TODO: compare to previous period for trend
         revenue_by_payment_method: Object.entries(revenueByMethod).map(([method, amount_cents]) => ({
@@ -142,8 +153,8 @@ export default function OwnerAnalytics() {
           hour: i,
           revenue_cents: (revenueByHour[i] || 0) * 100
         })),
-        customer_lifetime_value: 0,
-        repeat_customer_rate: 0
+        customer_lifetime_value: customerLifetimeValue,
+        repeat_customer_rate: repeatCustomerRate
       });
 
       // Most popular items from order_items
@@ -174,41 +185,55 @@ export default function OwnerAnalytics() {
       });
       const avgPrepTime = prepTimes.length > 0 ? prepTimes.reduce((a, b) => a + b, 0) / prepTimes.length : 0;
 
+      // Table turnover = completed bookings per day (avg) in the period
+      const daysInPeriod = period === 'today' ? 1 : period === 'week' ? 7 : period === 'month' ? 30 : 90;
+      const { data: bookingsData } = await supabase
+        .from('bookings')
+        .select('cafe_id, booking_date, checked_in_at')
+        .eq('cafe_id', cafe.id)
+        .gte('booking_date', since.split('T')[0])
+        .in('status', ['confirmed', 'checked_in', 'completed']);
+
+      const completedBookings = (bookingsData ?? []).filter((b: Record<string, unknown>) => b.checked_in_at).length;
+      const tableTurnoverRate = daysInPeriod > 0 ? completedBookings / daysInPeriod : 0;
+
+      // Waitlist data — query bookings table with waitlist_status='active'
+      // (no standalone waitlist table exists)
+      const { data: waitlistBookings } = await supabase
+        .from('bookings')
+        .select('created_at, converted_at, cancelled_at')
+        .eq('cafe_id', cafe.id)
+        .eq('waitlist_status', 'active')
+        .gte('booking_date', since.split('T')[0]);
+
+      const totalWaitlist = (waitlistBookings ?? []).length;
+      const converted = (waitlistBookings ?? []).filter((w: Record<string, unknown>) => w.converted_at).length;
+      const cancelledWaitlist = (waitlistBookings ?? []).filter((w: Record<string, unknown>) => w.cancelled_at && !w.converted_at).length;
+      const conversionRate = totalWaitlist > 0 ? converted / totalWaitlist : 0;
+      const noShowRate = totalWaitlist > 0 ? cancelledWaitlist / totalWaitlist : 0;
+
+      // Peak waitlist hours
+      const waitlistHours: Record<number, number> = {};
+      (waitlistBookings ?? []).forEach((w: Record<string, unknown>) => {
+        const h = new Date(w.created_at as string).getHours();
+        waitlistHours[h] = (waitlistHours[h] || 0) + 1;
+      });
+
       setOperationalData({
         total_orders: totalOrders,
         total_revenue_cents: totalRevenue * 100,
         avg_order_value_cents: avgOrderValue * 100,
         orders_per_hour: ordersPerHour,
         peak_hour: `${peakHour}:00-${peakHour + 1}:00`,
-        table_turnover_rate: 0, // TODO: real calculation from bookings
+        table_turnover_rate: tableTurnoverRate,
         avg_preparation_time_minutes: avgPrepTime,
-        waitlist_conversion_rate: 0, // TODO: real from waitlist data
+        waitlist_conversion_rate: conversionRate,
         most_popular_items: mostPopularItems
-      });
-
-      // Fetch waitlist data
-      const { data: waitlistData2 } = await supabase
-        .from('waitlist')
-        .select('created_at, converted_at, cancelled_at')
-        .eq('cafe_id', cafe.id)
-        .gte('created_at', since);
-
-      const totalWaitlist = waitlistData2?.length || 0;
-      const converted = waitlistData2?.filter((w: Record<string, unknown>) => w.converted_at).length || 0;
-      const cancelled = waitlistData2?.filter((w: Record<string, unknown>) => w.cancelled_at && !w.converted_at).length || 0;
-      const conversionRate = totalWaitlist > 0 ? converted / totalWaitlist : 0;
-      const noShowRate = totalWaitlist > 0 ? cancelled / totalWaitlist : 0;
-
-      // Peak waitlist hours
-      const waitlistHours: Record<number, number> = {};
-      (waitlistData2 ?? []).forEach((w: Record<string, unknown>) => {
-        const h = new Date(w.created_at as string).getHours();
-        waitlistHours[h] = (waitlistHours[h] || 0) + 1;
       });
 
       setWaitlistData({
         total_waitlist_entries: totalWaitlist,
-        average_wait_time_minutes: 0, // TODO: if waitlist has seated_at
+        average_wait_time_minutes: 0,
         conversion_rate: conversionRate,
         no_show_rate: noShowRate,
         peak_waitlist_hours: Object.entries(waitlistHours)
@@ -230,7 +255,7 @@ export default function OwnerAnalytics() {
             .from('orders')
             .select('id, accepted_at, ready_at')
             .eq('cafe_id', cafe.id)
-            .eq('assignee', staff.user_id as string)
+            .eq('assigned_staff_id', staff.user_id as string)
             .gte('created_at', since)
             .in('status', ['accepted', 'preparing', 'ready', 'completed']);
 
@@ -264,7 +289,7 @@ export default function OwnerAnalytics() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [cafe?.id, period]);
 
   const handleExport = async () => {
     if (!cafe?.id) return;
@@ -308,8 +333,8 @@ export default function OwnerAnalytics() {
   };
 
   useEffect(() => {
-    fetchAnalytics();
-  }, [cafe?.id, period]);
+    void fetchAnalytics();
+  }, [cafe?.id, period, fetchAnalytics]);
 
   const periodLabels = {
     today: 'Today',

@@ -28,6 +28,17 @@ const makeInviteToken = () => (crypto.randomUUID?.() ?? `${Date.now()}-${Math.ra
 const fmtMin = (s: number) => s ? `${Math.round(s / 60)}m` : "—";
 const fmtDur = (sec: number) => { const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60); return h > 0 ? `${h}h ${m}m` : `${m}m`; };
 
+// Group shifts by date string
+function groupByDate(entries: ShiftEntry[]) {
+  const groups: Record<string, ShiftEntry[]> = {};
+  for (const e of entries) {
+    const dateKey = new Date(e.clock_in_at).toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+    if (!groups[dateKey]) groups[dateKey] = [];
+    groups[dateKey].push(e);
+  }
+  return groups;
+}
+
 export default function OwnerStaff() {
   const { cafe, loading: cafeLoading } = useOwnerCafe();
   const { user } = useAuth();
@@ -40,14 +51,14 @@ export default function OwnerStaff() {
   const [qrFor, setQrFor] = useState<StaffCode | null>(null);
   const [qrCanvas, setQrCanvas] = useState<HTMLCanvasElement | null>(null);
   const joinUrl = useMemo(() => `${window.location.origin}/#/staff/join`, []);
-  const inviteUrl = (token: string | null, code: string) => `${joinUrl}?invite=${encodeURIComponent(token || code)}`;
+  const inviteUrl = useCallback((token: string | null, code: string) => `${joinUrl}?invite=${encodeURIComponent(token || code)}`, [joinUrl]);
 
   const load = useCallback(async () => {
     if (!cafe) return;
     const [codeRes, perfRes, shiftRes] = await Promise.all([
       supabase.from("cafe_staff_codes").select("id, code, token, role, active, used_count, max_uses, created_at").eq("cafe_id", cafe.id).order("created_at", { ascending: false }),
       supabase.rpc("get_staff_performance", { _cafe_id: cafe.id, _days: days }),
-      supabase.rpc("get_staff_shifts", { _cafe_id: cafe.id, _days: 14 }),
+      supabase.rpc("get_staff_shifts", { _cafe_id: cafe.id, _days: 30 }),
     ]);
     setCodes((codeRes.data as StaffCode[]) ?? []);
     setPerf(((perfRes.data as PerformancePayload | null)?.staff) ?? []);
@@ -57,7 +68,6 @@ export default function OwnerStaff() {
 
   useEffect(() => { if (cafe) void load(); }, [cafe, load]);
 
-  // Render QR when the dialog's canvas is mounted (callback ref handles portal timing).
   useEffect(() => {
     if (!qrFor || !qrCanvas) return;
     void QRCode.toCanvas(qrCanvas, inviteUrl(qrFor.token, qrFor.code), {
@@ -75,6 +85,11 @@ export default function OwnerStaff() {
   };
   const copyInvite = async (row: StaffCode) => { await navigator.clipboard.writeText(inviteUrl(row.token, row.code)); toast.success("Link copied"); };
   const toggleCode = async (row: StaffCode) => { const { error } = await supabase.from("cafe_staff_codes").update({ active: !row.active }).eq("id", row.id); if (error) toast.error(error.message); else await load(); };
+  const deleteCode = async (row: StaffCode) => {
+    if (!cafe || !confirm("Delete this invite link? Staff who already joined will keep their access.")) return;
+    const { error } = await supabase.from("cafe_staff_codes").delete().eq("id", row.id);
+    if (error) toast.error(error.message); else { toast.success("Invite deleted"); await load(); }
+  };
   const removeStaff = async (userId: string) => {
     if (!cafe || !confirm("Remove this staff member?")) return;
     const { error } = await supabase.from("cafe_staff").update({ status: "inactive" }).eq("cafe_id", cafe.id).eq("user_id", userId);
@@ -87,6 +102,8 @@ export default function OwnerStaff() {
     orders: acc.orders + p.orders_accepted + p.orders_prepared + p.orders_served + p.orders_completed,
     revenue: acc.revenue + Number(p.revenue_touched), hours: acc.hours + Number(p.hours_worked),
   }), { orders: 0, revenue: 0, hours: 0 });
+
+  const shiftGroups = groupByDate(shifts);
 
   return (
     <OwnerLayout title="Runners" subtitle="Invite runners, track performance & shifts" action={
@@ -127,6 +144,7 @@ export default function OwnerStaff() {
                         <Button size="sm" variant="outline" onClick={() => setQrFor(c)} title="Show QR"><QrCodeIcon className="w-3 h-3" /></Button>
                         <Button size="sm" variant="outline" onClick={() => copyInvite(c)}><Copy className="w-3 h-3" /></Button>
                         <Button size="sm" variant="outline" onClick={() => toggleCode(c)}>{c.active ? "Disable" : "Enable"}</Button>
+                        <Button size="sm" variant="ghost" onClick={() => deleteCode(c)} title="Delete invite"><X className="w-3 h-3" /></Button>
                       </div>
                     </div>
                   </div>
@@ -177,23 +195,40 @@ export default function OwnerStaff() {
             )}
           </Card>
 
+          {/* Shift history grouped by date */}
           <Card className="p-5">
             <h2 className="font-display text-xl font-bold mb-4 flex items-center gap-2"><Timer className="w-5 h-5" /> Recent shifts</h2>
             {shifts.length === 0 ? <p className="text-sm text-muted-foreground">No shift activity yet.</p> : (
-              <div className="space-y-2">
-                {shifts.slice(0, 25).map((s) => {
-                  const start = new Date(s.clock_in_at); const end = s.clock_out_at ? new Date(s.clock_out_at) : null;
-                  const total = end ? Math.floor((end.getTime() - start.getTime()) / 1000) - s.total_break_seconds : 0;
-                  return (
-                    <div key={s.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold">{s.name} <span className="text-xs text-muted-foreground capitalize">· {s.role}</span></p>
-                        <p className="text-xs text-muted-foreground">{start.toLocaleString()} → {end ? end.toLocaleTimeString() : <span className="text-success font-semibold">on shift</span>}</p>
-                      </div>
-                      <p className="text-sm font-bold">{end ? fmtDur(total) : "—"}</p>
+              <div className="space-y-5 max-h-96 overflow-y-auto pr-1">
+                {Object.entries(shiftGroups).map(([dateStr, dayShifts]) => (
+                  <div key={dateStr}>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 sticky top-0 bg-card py-1">{dateStr}</p>
+                    <div className="space-y-1.5">
+                      {dayShifts.map((s) => {
+                        const start = new Date(s.clock_in_at);
+                        const end = s.clock_out_at ? new Date(s.clock_out_at) : null;
+                        const total = end ? Math.floor((end.getTime() - start.getTime()) / 1000) - s.total_break_seconds : 0;
+                        return (
+                          <div key={s.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-semibold truncate">{s.name}</p>
+                                {end === null && <span className="text-[10px] bg-success/15 text-success px-2 py-0.5 rounded-full font-semibold shrink-0">ON SHIFT</span>}
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                {start.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                                {end
+                                  ? ` → ${end.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`
+                                  : " → ..."}
+                              </p>
+                            </div>
+                            <p className="text-sm font-bold shrink-0">{end ? fmtDur(total) : "—"}</p>
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
               </div>
             )}
           </Card>

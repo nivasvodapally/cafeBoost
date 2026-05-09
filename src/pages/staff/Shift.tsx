@@ -31,7 +31,7 @@ const fmtDur = (sec: number) => {
 
 export default function StaffShift() {
   const { user } = useAuth();
-  const { cafe } = useStaffCafe();
+  const { cafe, refresh } = useStaffCafe();
   const [info, setInfo] = useState<StaffStats | null>(null);
   const [history, setHistory] = useState<ShiftRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,9 +75,11 @@ export default function StaffShift() {
   const call = async (rpc: ShiftRpc, ok: string) => {
     setBusy(true);
     try {
-      const { error } = await supabase.rpc(rpc);
+      // clock_out has an optional _notes param; pass it explicitly to avoid overload ambiguity
+      const { error } = rpc === "clock_out"
+        ? await supabase.rpc("clock_out", { _notes: null })
+        : await supabase.rpc(rpc);
       if (error) {
-        // Provide more user-friendly error messages
         if (error.message.includes('No active staff assignment')) {
           toast.error("You are not assigned as staff to any cafe. Please contact your manager.");
         } else if (error.message.includes('No open shift')) {
@@ -92,7 +94,13 @@ export default function StaffShift() {
           toast.error(error.message);
         }
       } else {
+        // Sync on_break status to cafe_staff so dashboard orders can be gated
+        // start_break and end_break also need to sync since the RPCs don't do it
+        if (rpc === "start_break" || rpc === "end_break") {
+          await supabase.rpc("set_staff_break", { _on_break: rpc === "start_break" });
+        }
         toast.success(ok);
+        await refresh(); // refresh useStaffCafe so StaffDashboard re-fetches orders
       }
     } catch (err) {
       console.error(`Error calling ${rpc}:`, err);

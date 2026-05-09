@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Logo } from "@/components/Logo";
@@ -6,10 +6,9 @@ import { ArrowRight, Coffee, Gift, CalendarCheck, QrCode, Search, Heart, Sparkle
 import heroImage from "@/assets/hero-cafe.jpg";
 import { useEffect, useState } from "react";
 import { QrScannerDialog } from "@/components/QrScannerDialog";
-import { useAuth } from "@/hooks/useAuth";
 
 const perks = [
-  { icon: Gift, title: "Earn rewards", desc: "Collect points and stamps every visit at your favorite cafes." },
+  { icon: Gift, title: "Earn rewards", desc: "Collect points every visit at your favorite cafes." },
   { icon: CalendarCheck, title: "Book a table", desc: "Reserve your spot in seconds — no calls, no waiting." },
   { icon: QrCode, title: "Order at the table", desc: "Scan, order and pay without flagging down a server." },
   { icon: Heart, title: "Save your favorites", desc: "Keep your usual order and your favorite spots one tap away." },
@@ -17,26 +16,12 @@ const perks = [
 
 const howItWorks = [
   { step: "1", title: "Find a cafe", desc: "Browse cafes near you or scan a QR at the table." },
-  { step: "2", title: "Order or book", desc: "Skip the queue. Continue as guest — no signup needed." },
-  { step: "3", title: "Earn & enjoy", desc: "Save your rewards anytime by claiming your account." },
+  { step: "2", title: "Browse the menu", desc: "Explore the full menu as a guest — no signup needed to look around." },
+  { step: "3", title: "Order or book", desc: "Create a free account when you're ready to place an order." },
 ];
 
 export default function CustomerLanding() {
   const [scanOpen, setScanOpen] = useState(false);
-  const { user, isGuest, loading } = useAuth();
-  const navigate = useNavigate();
-
-  // After Google OAuth, the user lands back on `/` because that's the only
-  // origin allowed in the OAuth redirect URI. Restore their intended destination.
-  useEffect(() => {
-    if (loading || !user || isGuest) return;
-    let dest: string | null = null;
-    try {
-      dest = sessionStorage.getItem("cafeboost:postAuthReturnTo");
-      if (dest) sessionStorage.removeItem("cafeboost:postAuthReturnTo");
-    } catch { /* ignore */ }
-    if (dest) navigate(dest, { replace: true });
-  }, [user, isGuest, loading, navigate]);
 
   useEffect(() => {
     document.title = "CafeBoost — Find cafes, earn rewards, skip the queue";
@@ -71,14 +56,14 @@ export default function CustomerLanding() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid lg:grid-cols-2 gap-12 lg:gap-16 items-center py-16 md:py-24">
           <div className="animate-fade-in">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent-soft text-accent-foreground text-xs font-semibold mb-6">
-              <Sparkles className="w-3.5 h-3.5" /> No signup required
+              <Sparkles className="w-3.5 h-3.5" /> Browse free · sign up when you order
             </div>
             <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.05]">
               Find your next <br className="hidden sm:block" />
               favorite cafe <span className="inline-block">☕</span>
             </h1>
             <p className="mt-6 text-lg text-muted-foreground max-w-xl leading-relaxed">
-              Discover great cafes nearby, book a table, order ahead and collect rewards on every visit. Get started in seconds — guests welcome.
+              Discover great cafes nearby, book a table, and order ahead. Browse the menu right now — create an account when you're ready to order.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link to="/discover"><Button variant="hero" size="xl" className="group gap-2">

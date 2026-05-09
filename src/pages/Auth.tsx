@@ -40,13 +40,13 @@ export default function Auth() {
 
   useEffect(() => { document.title = "Sign in — CafeBoost"; }, []);
 
-  // Auto-redirect already-signed-in customers and restore deep-link intent.
+  // Auto-redirect already-signed-in customers (but not anonymous guests).
   useEffect(() => {
     let cancel = false;
     void supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (cancel || !session?.user) return;
-      const isAnon = (session.user as typeof session.user & { is_anonymous?: boolean }).is_anonymous;
-      if (isAnon) return; // let guest stay on auth page if they want to claim/upgrade
+      const isAnon = (session.user as { is_anonymous?: boolean }).is_anonymous;
+      if (isAnon) return; // let guest stay on auth page if they want to claim
       const { data: hasOwner } = await supabase.rpc("has_role", {
         _user_id: session.user.id, _role: "owner",
       });
@@ -63,9 +63,20 @@ export default function Auth() {
 
   const onContinueAsGuest = async () => {
     setGuestLoading(true); setError(null);
+    await supabase.auth.signOut();
     const { error: err } = await signInAsGuest();
     if (err) { setGuestLoading(false); setError(err.message); return; }
-
+    // Wait for the full auth handshake to complete:
+    // 1. Supabase fires SIGNED_IN
+    // 2. AuthProvider's onAuthStateChange runs (sets user + schedules profile fetch)
+    // 3. Profile fetch resolves (makes isGuest reliable)
+    // Add a delay so the setTimeout in AuthProvider (which defers profile fetch) also runs.
+    await new Promise<void>((resolve) => {
+      const { data: stop } = supabase.auth.onAuthStateChange((event) => {
+        if (event === "SIGNED_IN") { stop?.unsubscribe(); resolve(); }
+      });
+      setTimeout(resolve, 1000); // give profile fetch time to complete too
+    });
     setGuestLoading(false);
     toast.success("You're in - explore as a guest");
     navigate(returnTo);

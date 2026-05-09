@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Loader2, UserRoundCog } from "lucide-react";
 import { toast } from "sonner";
@@ -36,14 +36,14 @@ export default function StaffJoin() {
 
   useEffect(() => { document.title = "Staff Join — CafeBoost"; }, []);
   useEffect(() => { if (invite) setCode(invite); }, [invite]);
-  const joinWithCode = async () => {
+  const joinWithCode = useCallback(async () => {
     if (!code.trim()) throw new Error("Open a staff invite link or paste a valid invite code.");
     const { error: joinError } = await supabase.rpc("join_staff_with_code", { _code: code.trim(), _full_name: fullName.trim() || null });
     if (joinError) throw joinError;
     await refreshProfile();
     toast.success("Staff access activated");
     navigate(returnTo);
-  };
+  }, [code, fullName, refreshProfile, navigate, returnTo]);
 
   useEffect(() => {
     if (user && roles.some((role) => staffRoles.includes(role))) navigate(returnTo, { replace: true });
@@ -53,11 +53,13 @@ export default function StaffJoin() {
     autoJoinAttempted.current = true;
     setLoading(true);
     void joinWithCode().catch((err) => setError(getErrorMessage(err))).finally(() => setLoading(false));
-  }, [authLoading, user, invite, roles]);
+  }, [authLoading, user, invite, roles, joinWithCode]);
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault(); setError(null); setLoading(true);
     try {
+      // Sign out first — ensures a clean slate and prevents session inheritance from other tabs/roles
+      await supabase.auth.signOut();
       if (mode === "signin") {
         const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
         if (signInError) throw signInError;

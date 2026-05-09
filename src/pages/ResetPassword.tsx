@@ -26,13 +26,13 @@ export default function ResetPassword() {
   useEffect(() => {
     document.title = "Reset Password — CafeBoost";
     // Confirm we have a recovery session before showing the form.
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+    const { data: stop } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") setReady(true);
     });
     void supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setReady(true);
     });
-    return () => sub.subscription.unsubscribe();
+    return () => stop?.unsubscribe();
   }, []);
 
   const onSubmit = async (e: React.FormEvent) => {

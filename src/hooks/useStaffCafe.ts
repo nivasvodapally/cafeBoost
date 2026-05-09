@@ -11,7 +11,9 @@ export type StaffAssignment = {
   user_id: string;
   role: Extract<AppRole, "chef" | "runner">;
   status: string;
+  on_break: boolean;
   joined_at: string;
+  has_open_shift: boolean;
 };
 
 export function useStaffCafe() {
@@ -23,13 +25,27 @@ export function useStaffCafe() {
   const load = useCallback(async (uid: string) => {
     const { data: staff, error } = await supabase
       .from("cafe_staff")
-      .select("id, cafe_id, user_id, role, status, joined_at")
+      .select("id, cafe_id, user_id, role, status, on_break, joined_at")
       .eq("user_id", uid)
       .eq("status", "active")
       .maybeSingle();
 
     if (error) console.error("[useStaffCafe]", error);
-    setAssignment((staff as StaffAssignment | null) ?? null);
+
+    // Check for open shift
+    let hasOpenShift = false;
+    if (staff) {
+      const { data: openShift } = await supabase
+        .from("staff_shifts")
+        .select("id")
+        .eq("user_id", uid)
+        .is("clock_out_at", null)
+        .maybeSingle();
+      hasOpenShift = !!openShift;
+    }
+
+    const enriched = staff ? { ...(staff as StaffAssignment), has_open_shift: hasOpenShift } : null;
+    setAssignment(enriched as StaffAssignment | null);
 
     if (staff?.cafe_id) {
       const { data: cafeRow } = await supabase

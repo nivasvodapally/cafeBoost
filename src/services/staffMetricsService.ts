@@ -95,23 +95,40 @@ export class StaffMetricsService {
    * Get staff leaderboard for a cafe
    */
   static async getStaffLeaderboard(cafeId: string, periodDays: number = 7): Promise<StaffLeaderboardEntry[]> {
-    const { data, error } = await supabase.rpc('get_staff_leaderboard', {
-      cafe_id: cafeId,
-      period_days: periodDays
-    });
+    const [rpcResult, ordersResult] = await Promise.all([
+      supabase.rpc('get_staff_leaderboard', { cafe_id: cafeId, period_days: periodDays }),
+      supabase.from('orders').select('paid_collected_by, total_amount')
+        .eq('cafe_id', cafeId)
+        .gte('created_at', new Date(Date.now() - periodDays * 24 * 60 * 60 * 1000).toISOString())
+        .in('status', ['completed', 'ready', 'preparing', 'accepted'])
+    ]);
 
+    const { data, error } = rpcResult;
     if (error) {
       console.error('Error fetching staff leaderboard:', error);
       throw new Error(`Failed to fetch leaderboard: ${error.message}`);
     }
 
-    const leaderboard = (data || []).map((entry: StaffLeaderboardRpcResult) => ({
-      ...entry,
-      efficiency_score: this.calculateEfficiencyScore(entry),
-      revenue_contribution: 0 // Would need actual revenue calculation
-    }));
+    const orders = ordersResult.data || [];
+    const totalCafeRevenue = orders.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
 
-    // Calculate trends
+    // Build per-staff revenue map from paid_collected_by field
+    const staffRevenueMap: Record<string, number> = {};
+    for (const o of orders) {
+      if (o.paid_collected_by) {
+        staffRevenueMap[o.paid_collected_by] = (staffRevenueMap[o.paid_collected_by] || 0) + Number(o.total_amount || 0);
+      }
+    }
+
+    const leaderboard = (data || []).map((entry: StaffLeaderboardRpcResult) => {
+      const staffRevenue = staffRevenueMap[entry.staff_id] || 0;
+      return {
+        ...entry,
+        efficiency_score: this.calculateEfficiencyScore(entry),
+        revenue_contribution: totalCafeRevenue > 0 ? Math.round((staffRevenue / totalCafeRevenue) * 100 * 10) / 10 : 0
+      };
+    });
+
     return this.calculateTrends(leaderboard, cafeId);
   }
 

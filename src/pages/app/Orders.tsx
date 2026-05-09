@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,16 +16,13 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Loader2, ShoppingBag, Check, X, RotateCcw, AlertCircle, ChefHat, Package, Utensils, ReceiptText, CheckCircle2, Smartphone, Star, Edit, Split, Clock, Zap, Crown, Plus, Minus, Info } from "lucide-react";
+import { Loader2, ShoppingBag, Check, X, RotateCcw, AlertCircle, ChefHat, Package, Utensils, ReceiptText, CheckCircle2, Smartphone, Star, Edit, Split, Clock, Zap, Crown, Plus, Minus, Info, Bell } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
 import { setActiveCafe } from "@/lib/cafeContext";
 import { PaymentDialog } from "@/components/PaymentDialog";
 import { OrderModificationService } from "@/services/orderModificationService";
-import { SplitBillService } from "@/services/splitBillService";
 import type { Database } from "@/integrations/supabase/types";
 
 type OrderRow = Database["public"]["Tables"]["orders"]["Row"];
@@ -82,9 +80,11 @@ export default function CustomerOrders() {
   const [splitCount, setSplitCount] = useState(2);
   const [customSplits, setCustomSplits] = useState<Record<string, number>>({});
   const [splitLoading, setSplitLoading] = useState(false);
+  const [callDialog, setCallDialog] = useState<{ open: boolean; order: Order | null }>({ open: false, order: null });
+  const [callLoading, setCallLoading] = useState(false);
   const navigate = useNavigate();
 
-  const fetchAll = async () => {
+  const fetchAll = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase.from("orders")
       .select("*, cafe:cafes(name), order_items(*)")
@@ -99,7 +99,7 @@ export default function CustomerOrders() {
       setItems(map);
     }
     setLoading(false);
-  };
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -110,7 +110,7 @@ export default function CustomerOrders() {
       })
       .subscribe();
     return () => { void supabase.removeChannel(sub); };
-  }, [user]);
+  }, [user, fetchAll]);
 
   const cancelByCustomer = async (id: string) => {
     setCancelDialog({ open: true, orderId: id });
@@ -221,9 +221,8 @@ export default function CustomerOrders() {
         splits: splits.map((split, index) => ({
           name: split.name,
           amount: split.amount,
-          sequence: index + 1
+          sequence: index + 1,
         })),
-        userId: user?.id || ''
       });
 
       if (result.success) {
@@ -238,6 +237,27 @@ export default function CustomerOrders() {
       toast.error("An error occurred while splitting the order.");
     } finally {
       setSplitLoading(false);
+    }
+  };
+
+  const handleCallStaff = async () => {
+    if (!callDialog.order || !user) return;
+    setCallLoading(true);
+    try {
+      const { error } = await supabase.rpc('call_staff', {
+        _order_id: callDialog.order.id,
+        _cafe_id: callDialog.order.cafe_id,
+        _customer_name: callDialog.order.customer_name,
+        _table_no: callDialog.order.table_no,
+        _message: null,
+      });
+      if (error) throw error;
+      toast.success("Staff called — they'll be with you shortly");
+      setCallDialog({ open: false, order: null });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not call staff");
+    } finally {
+      setCallLoading(false);
     }
   };
 
@@ -397,6 +417,12 @@ export default function CustomerOrders() {
                 {!isPaid && o.status !== 'cancelled' && (
                   <Button variant="hero" size="sm" className="flex-1 h-8 gap-2" onClick={() => setPaymentOrder(o)}>
                     <Smartphone className="w-3 h-3" /> Pay ₹{Number(o.total_amount).toFixed(2)}
+                  </Button>
+                )}
+                {/* Call Staff Button — only for in-progress orders with a table */}
+                {o.table_no && !["completed", "cancelled"].includes(o.status) && (
+                  <Button variant="outline" size="sm" className="flex-1 h-8 gap-1" onClick={() => setCallDialog({ open: true, order: o })}>
+                    <Bell className="w-3 h-3" /> Call Staff
                   </Button>
                 )}
                 {!o.cancellation_requested && o.status !== "cancelled" && (o.status === "placed" || o.status === "accepted") && (
@@ -614,6 +640,33 @@ export default function CustomerOrders() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Call Staff Dialog */}
+      <Dialog open={callDialog.open} onOpenChange={(open) => setCallDialog({ ...callDialog, open })}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Bell className="w-5 h-5 text-accent" /> Call Staff</DialogTitle>
+            <DialogDescription>
+              Send a notification to staff that you need assistance
+              {callDialog.order?.table_no ? ` at Table ${callDialog.order.table_no}` : ""}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <p className="text-sm text-muted-foreground">
+              A staff member will be alerted and come to your table shortly.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCallDialog({ open: false, order: null })} disabled={callLoading}>
+              Cancel
+            </Button>
+            <Button variant="hero" onClick={handleCallStaff} disabled={callLoading}>
+              {callLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4 mr-2" />}
+              Call Staff
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </CustomerLayout>
   );
- }
+}

@@ -49,12 +49,27 @@ export default function StaffDashboard() {
   const role = (assignment?.role ?? "") as "chef" | "runner" | "";
   const presets = cafe?.eta_presets?.length ? cafe.eta_presets : [5, 10, 15, 20, 30];
 
+  // Staff receives orders only when: active + has an open shift + not on break
+  const isCheckedIn = assignment?.status === "active" && assignment?.has_open_shift && !assignment?.on_break;
+
   useEffect(() => {
     if (!cafe) return;
     let cancelled = false;
     setLoading(true);
 
+    // Safety timeout: if assignment never loads (e.g. orphan auth session
+    // after cafe_staff deletion), force the loading state to end after 5s.
+    const safetyTimeout = setTimeout(() => {
+      if (!cancelled) setLoading(false);
+    }, 5000);
+
     const fetchOrders = async () => {
+      // Only fetch orders if staff is checked in and not on break
+      if (!isCheckedIn) {
+        setOrders([]);
+        setLoading(false);
+        return;
+      }
       const { data } = await supabase.from("orders").select(SELECT).eq("cafe_id", cafe.id)
         .not("payment_method", "is", null)
         .in("status", ["placed", "accepted", "preparing", "ready"])
@@ -77,7 +92,7 @@ export default function StaffDashboard() {
       }
     };
 
-    void fetchOrders().finally(() => { if (!cancelled) setLoading(false); });
+    void fetchOrders().finally(() => { clearTimeout(safetyTimeout); if (!cancelled) setLoading(false); });
 
     if (channelRef.current) void supabase.removeChannel(channelRef.current);
     const ch = supabase.channel(`staff-orders:${cafe.id}`)
@@ -88,7 +103,7 @@ export default function StaffDashboard() {
     // Refresh every 15s as a realtime safety net + tick age displays.
     const tick = setInterval(() => void fetchOrders(), 15_000);
     return () => { cancelled = true; clearInterval(tick); if (channelRef.current) void supabase.removeChannel(channelRef.current); };
-  }, [cafe]);
+  }, [cafe, isCheckedIn]);
 
   const visible = useMemo(() => {
     const allowed = role ? visibleByRole[role] : [];
@@ -112,8 +127,32 @@ export default function StaffDashboard() {
 
   if (staffLoading || loading) return <StaffLayout title="Orders"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div></StaffLayout>;
 
+  // If auth is valid but no cafe assignment (orphan session after cafe_staff deletion), show empty state
+  if (!assignment) {
+    return (
+      <StaffLayout title="Orders" subtitle="Not assigned to any cafe">
+        <Card className="p-10 text-center">
+          <AlertCircle className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+          <p className="font-display text-xl font-bold">Not assigned to a cafe</p>
+          <p className="text-sm text-muted-foreground mt-2">
+            Your account is not linked to any cafe as staff. Ask the cafe owner to send you a staff invite code.
+          </p>
+          <Button variant="hero" className="mt-4" onClick={() => { void signOut(); navigate("/staff/join"); }}>
+            Leave portal
+          </Button>
+        </Card>
+      </StaffLayout>
+    );
+  }
+
   const title = role === "chef" ? "Kitchen display" : "Runner queue";
-  const subtitle = `${cafe?.name ?? "Cafe"} · ${visible.length} active`;
+  const subtitle = assignment
+    ? !assignment.has_open_shift
+      ? "Clock in to see orders"
+      : assignment.on_break
+        ? "On break — orders hidden"
+        : `${cafe?.name ?? "Cafe"} · ${visible.length} active`
+    : "Not assigned to any cafe";
 
   const renderOrder = (o: OrderRow) => (
     <Card key={o.id} className="p-4 space-y-3">

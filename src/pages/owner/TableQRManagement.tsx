@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { OwnerLayout } from "@/components/OwnerLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,7 @@ export default function TableQRManagement() {
   });
   const [isCreating, setIsCreating] = useState(false);
 
-  const fetchTables = async () => {
+  const fetchTables = useCallback(async () => {
     if (!cafe?.id) return;
     
     setLoading(true);
@@ -46,13 +46,13 @@ export default function TableQRManagement() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [cafe?.id]);
 
   useEffect(() => {
     if (cafe?.id) {
-      fetchTables();
+      void fetchTables();
     }
-  }, [cafe?.id]);
+  }, [cafe?.id, fetchTables]);
 
   const handleCreateTable = async () => {
     if (!cafe?.id) return;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { OwnerLayout } from "@/components/OwnerLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,15 +42,13 @@ export default function OwnerQR() {
     notes: ""
   });
   const [isCreating, setIsCreating] = useState(false);
-
-  if (loading) return <OwnerLayout title="QR Code"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin" /></div></OwnerLayout>;
   const slug = cafe?.slug ?? "your-cafe";
   const url = qrUrl(slug, "main");
   const tableUrl = `${url}/table/${encodeURIComponent(tableNo || "1")}`;
 
-  const fetchTables = async () => {
+  const fetchTables = useCallback(async () => {
     if (!cafe?.id) return;
-    
+
     setTableLoading(true);
     try {
       const tablesData = await TableManagementService.getTables(cafe.id);
@@ -61,13 +59,15 @@ export default function OwnerQR() {
     } finally {
       setTableLoading(false);
     }
-  };
+  }, [cafe?.id]);
 
   useEffect(() => {
     if (cafe?.id && cafe?.table_ordering_enabled) {
-      fetchTables();
+      void fetchTables();
     }
-  }, [cafe?.id, cafe?.table_ordering_enabled]);
+  }, [cafe?.id, cafe?.table_ordering_enabled, fetchTables]);
+
+  if (loading) return <OwnerLayout title="QR Code"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin" /></div></OwnerLayout>;
 
   const downloadPNG = async (u: string, label: string) => {
     const dataUrl = await QRCode.toDataURL(u, { width: 1024, margin: 2 });

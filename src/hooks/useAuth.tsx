@@ -25,6 +25,7 @@ type AuthState = {
   roles: AppRole[];
   loading: boolean;
   isGuest: boolean;
+  loginSession: string;
   refreshProfile: () => Promise<void>;
   hasRole: (role: AppRole) => boolean;
 };
@@ -33,8 +34,17 @@ const AuthContext = createContext<AuthState | null>(null);
 
 /**
  * AuthProvider — single source of truth for session, user, profile, and roles.
- * Lifted into App.tsx so RequireRole reads from context instead of firing
- * a fresh RPC on every navigation.
+ *
+ * Tab isolation is handled by the Supabase client storage adapter (client.ts).
+ * Each tab has its own session bucket keyed by a UUID in sessionStorage.
+ * Sign-in/sign-out/refresh in one tab never touches another.
+ *
+ * Auth state machine:
+ *  - loading=true: initial load, no user known yet.
+ *  - loading=false, user=null: signed out.
+ *  - loading=false, user=anon: guest browsing (can access customer routes).
+ *  - loading=false, user!=null: signed in. roles may still be loading.
+ *  - roles updated async after user is set.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -42,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loginSession] = useState<string>(() => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -54,36 +65,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ]);
       if (!mounted.current) return;
       setProfile((prof as Profile | null) ?? null);
-      setRoles((roleRows ?? []).map((r) => r.role).filter(isAppRole));
+      const nextRoles = (roleRows ?? []).map((r) => r.role).filter(isAppRole);
+      setRoles(nextRoles);
     };
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s);
-      setUser(s?.user ?? null);
+      if (!mounted.current) return;
       if (!s?.user) {
+        // Signed out: clear everything.
+        setSession(null);
+        setUser(null);
         setProfile(null);
         setRoles([]);
         setActiveCafe(null);
         setLoading(false);
       } else {
-        // Defer to avoid Supabase auth deadlocks during the initial token exchange.
-        setTimeout(() => { void fetchProfileAndRoles(s.user.id); }, 0);
+        setSession(s);
+        setUser(s.user);
+        // Defer loading=false until AFTER roles are set. This prevents RequireRole
+        // from flickering (roles=[] → correct roles) and redirecting owner/staff
+        // to /discover before roles arrive.
+        fetchProfileAndRoles(s.user.id).then(() => {
+          if (mounted.current) setLoading(false);
+        });
       }
     });
 
-    void supabase.auth.getSession().then(({ data: { session: s } }) => {
+    void supabase.auth.getSession().then(async ({ data: { session: s } }) => {
+      if (!mounted.current) return;
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
-        void fetchProfileAndRoles(s.user.id).finally(() => { if (mounted.current) setLoading(false); });
-      } else {
-        setLoading(false);
+        await fetchProfileAndRoles(s.user.id);
       }
+      if (mounted.current) setLoading(false);
     });
 
     return () => {
       mounted.current = false;
-      sub.subscription.unsubscribe();
+      sub.unsubscribe();
     };
   }, []);
 
@@ -100,11 +120,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const isGuest = Boolean(
-    (user as User & { is_anonymous?: boolean } | null)?.is_anonymous ?? profile?.is_guest ?? false
+    (user as User & { is_anonymous?: boolean } | null)?.is_anonymous
+    ?? profile?.is_guest
+    ?? false
   );
 
   const value: AuthState = {
-    session, user, profile, roles, loading, isGuest, refreshProfile,
+    session, user, profile, roles, loading, isGuest, loginSession, refreshProfile,
     hasRole: (role) => roles.includes(role),
   };
 
@@ -122,7 +144,7 @@ export async function signOut() {
   setActiveCafe(null);
 }
 
-/** Start (or reuse) a guest session. Captures optional name/phone into metadata. */
+/** Start (or reuse) a guest session. */
 export async function signInAsGuest(opts?: { fullName?: string; phone?: string }) {
   const { data: existing } = await supabase.auth.getSession();
   if (existing.session?.user) return { user: existing.session.user, error: null };
@@ -133,14 +155,6 @@ export async function signInAsGuest(opts?: { fullName?: string; phone?: string }
   return { user: data.user, error };
 }
 
-/**
- * Upgrade a guest (anonymous) user to a full account, preserving their user_id
- * and therefore all their orders, bookings and loyalty points.
- *
- * After updating auth, this also explicitly upserts the profiles row so that
- * full_name / claimed_at / is_guest reflect immediately (the trigger only sets
- * is_guest=false when email/phone get added; full_name needs an explicit write).
- */
 export async function claimGuestAccount(args: {
   email: string;
   password: string;
@@ -153,12 +167,7 @@ export async function claimGuestAccount(args: {
   };
   const { data, error } = await supabase.auth.updateUser(updates);
   if (error || !data.user) return { user: data.user, error };
-
-  // Force-refresh the session so the new email/password are immediately
-  // usable on this device (no need for the user to sign in again).
   await supabase.auth.refreshSession();
-
-  // Explicit profile write: the auth trigger doesn't update full_name on its own.
   const profileUpdates = {
     is_guest: false,
     claimed_at: new Date().toISOString(),

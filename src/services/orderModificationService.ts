@@ -29,8 +29,10 @@ export interface OrderModificationRequest {
 export interface OrderSplitRequest {
   orderId: string;
   splits: Array<{
-    items: number[]; // indices of items from original order
-    notes?: string;
+    name: string;       // label for this split (e.g. "Split 1")
+    amount: number;    // amount in rupees for this split
+    sequence: number;  // order of this split (1-indexed)
+    item_ids?: string[]; // optional: specific menu item IDs to include
   }>;
 }
 
@@ -178,16 +180,16 @@ export class OrderModificationService {
     error?: string;
   }> {
     try {
-      // Prepare split instructions for the database function
+      // split_order RPC expects: { name, amount, sequence } per split
       const splitInstructions = request.splits.map((split, index) => ({
-        items: split.items,
-        notes: split.notes || `Split part ${index + 1}`
+        name: split.name || `Split ${index + 1}`,
+        amount: split.amount,
+        sequence: split.sequence || index + 1,
       }));
 
-      // Call the database function to split the order
       const { data, error } = await supabase.rpc('split_order', {
         order_id: request.orderId,
-        split_instructions: JSON.stringify(splitInstructions)
+        split_instructions: JSON.stringify(splitInstructions),
       });
 
       if (error) {
@@ -195,9 +197,7 @@ export class OrderModificationService {
         return { success: false, error: error.message };
       }
 
-      // The function returns an array of new order IDs
-      const newOrderIds = data as string[];
-
+      const newOrderIds = (data as string[]) ?? [];
       return { success: true, newOrderIds };
     } catch (error) {
       console.error('Error in splitOrder:', error);

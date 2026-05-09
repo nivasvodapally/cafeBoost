@@ -29,7 +29,8 @@ export default function OwnerAuth() {
 
   useEffect(() => { document.title = "Cafe Owner Sign In — CafeBoost"; }, []);
 
-  // Redirect already-signed-in owners straight to dashboard
+  // Redirect already-signed-in owners straight to dashboard.
+  // Uses getSession directly so it doesn't depend on AuthProvider's loading state.
   useEffect(() => {
     let cancel = false;
     void supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -38,11 +39,11 @@ export default function OwnerAuth() {
         _user_id: session.user.id, _role: "owner",
       });
       if (cancel) return;
-      if (hasOwner) {
-        const { data: cafe } = await supabase.from("cafes")
-          .select("onboarding_completed").eq("owner_user_id", session.user.id).maybeSingle();
-        navigate(!cafe || !cafe.onboarding_completed ? "/owner-setup" : "/dashboard", { replace: true });
-      }
+      if (!hasOwner) return;
+      const { data: cafe } = await supabase.from("cafes")
+        .select("onboarding_completed").eq("owner_user_id", session.user.id).maybeSingle();
+      if (cancel) return;
+      navigate(!cafe || !cafe.onboarding_completed ? "/owner-setup" : "/dashboard", { replace: true });
     });
     return () => { cancel = true; };
   }, [navigate]);

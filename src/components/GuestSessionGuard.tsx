@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Sparkles } from "lucide-react";
 import { useAuth, signInAsGuest } from "@/hooks/useAuth";
 import { getActiveCafe, useValidateActiveCafe } from "@/lib/cafeContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const SUPPRESS_KEY = "cafeboost:welcome-back-suppress";
 const SESSION_TIMESTAMP_KEY = "cafeboost:guest_session_timestamp";
@@ -86,12 +87,16 @@ export function GuestSessionGuard() {
   const continueAsGuest = async () => {
     setBusy(true);
     const { error } = await signInAsGuest();
-    setBusy(false);
-    if (!error) {
-      sessionStorage.setItem(SUPPRESS_KEY, "1");
-      sessionStorage.setItem(SESSION_TIMESTAMP_KEY, Date.now().toString());
-      setOpen(false);
-    }
+    if (error) { setBusy(false); return; }
+    await new Promise<void>(resolve => {
+      const { data: stop } = supabase.auth.onAuthStateChange((event) => {
+        if (event === "SIGNED_IN") { stop?.unsubscribe(); resolve(); }
+      });
+      setTimeout(resolve, 800);
+    });
+    sessionStorage.setItem(SUPPRESS_KEY, "1");
+    sessionStorage.setItem(SESSION_TIMESTAMP_KEY, Date.now().toString());
+    setOpen(false);
   };
 
   const goSignIn = () => {

@@ -138,8 +138,8 @@ export default function OwnerLoyalty() {
       
       toast.success(`Points ${adjustment >= 0 ? 'added' : 'deducted'} successfully`);
       setPointsAdjustment(prev => ({ ...prev, [memberId]: 0 }));
-    } catch (error: any) {
-      toast.error(error.message || "Failed to adjust points");
+    } catch (error: unknown) {
+      toast.error((error as Error).message || "Failed to adjust points");
     }
   };
 

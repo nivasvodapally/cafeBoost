@@ -29,21 +29,25 @@ export default function CustomerHome() {
     if (!cafe) return;
     let cancelled = false;
     void (async () => {
-      const [memRes, itemsRes, ordersRes, favsRes] = await Promise.all([
-        user ? supabase.from("loyalty_memberships").select("loyalty_points, total_visits")
-          .eq("cafe_id", cafe.id).eq("customer_user_id", user.id).maybeSingle() : Promise.resolve({ data: null }),
-        supabase.from("menu_items").select("id, name, price, description, category")
-          .eq("cafe_id", cafe.id).eq("available", true).limit(4),
-        user ? supabase.from("orders").select("id, total_amount, status, created_at")
-          .eq("customer_user_id", user.id).eq("cafe_id", cafe.id)
-          .order("created_at", { ascending: false }).limit(3) : Promise.resolve({ data: null }),
-        user ? CustomerFavoritesService.getFavorites(cafe.id) : Promise.resolve([]),
+      const memPromise = user ? supabase.from("loyalty_memberships").select("loyalty_points, total_visits")
+        .eq("cafe_id", cafe.id).eq("customer_user_id", user.id).maybeSingle() : { data: null };
+      const itemsPromise = supabase.from("menu_items").select("id, name, price, description, category")
+        .eq("cafe_id", cafe.id).eq("available", true).limit(4);
+      const ordersPromise = user ? supabase.from("orders").select("id, total_amount, status, created_at")
+        .eq("customer_user_id", user.id).eq("cafe_id", cafe.id)
+        .order("created_at", { ascending: false }).limit(3) : { data: null };
+      const favsPromise = user
+        ? CustomerFavoritesService.getFavorites(cafe.id).catch(() => [] as FavoriteMenuItem[])
+        : Promise.resolve([] as FavoriteMenuItem[]);
+
+      const [memRes, itemsRes, ordersRes, favs] = await Promise.all([
+        memPromise, itemsPromise, ordersPromise, favsPromise,
       ]);
       if (cancelled) return;
-      setM(memRes.data ?? null);
+      setM(memRes?.data ?? null);
       setFeatured(((itemsRes.data as Featured[]) ?? []));
       setRecent(((ordersRes?.data as RecentOrder[]) ?? []));
-      setFavorites(favsRes as FavoriteMenuItem[]);
+      setFavorites(favs as FavoriteMenuItem[]);
       setLoading(false);
     })();
     return () => { cancelled = true; };
@@ -68,9 +72,9 @@ export default function CustomerHome() {
           <Card className="p-4 border-accent/40 bg-accent-soft/40 flex items-center justify-between gap-3 flex-wrap">
             <div>
               <p className="text-sm font-semibold">You're browsing as a guest</p>
-              <p className="text-xs text-muted-foreground">Save your visits, points and orders by creating an account.</p>
+              <p className="text-xs text-muted-foreground">Create a free account when you're ready to order — no rush.</p>
             </div>
-            <Link to="/claim-account"><Button variant="hero" size="sm">Save my account</Button></Link>
+            <Link to="/auth?mode=signup"><Button variant="hero" size="sm">Create account</Button></Link>
           </Card>
         )}
 

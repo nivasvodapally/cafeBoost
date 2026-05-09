@@ -21,6 +21,8 @@ export type PlaceOrderInput = {
   source?: Database["public"]["Enums"]["order_source"];
   tableNo?: string | null;
   cart: CartLine[];
+  /** Token that identifies this login session — used to count visits accurately. */
+  loginSession?: string;
 };
 
 const recentSubmits = new Map<string, number>();
@@ -52,6 +54,7 @@ export async function placeOrder(input: PlaceOrderInput) {
       _source: input.source ?? "app",
       _table_no: input.tableNo ?? null,
       _items: items,
+      _login_session: input.loginSession ?? null,
     });
     if (error) throw error;
     const r = data as { id: string; subtotal: number; tax_amount: number; total_amount: number; earned_points: number };

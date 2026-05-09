@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,7 +36,7 @@ export default function CustomerFavorites() {
   const [notes, setNotes] = useState("");
   const [editNotes, setEditNotes] = useState("");
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!cafe || !user) return;
     
     setLoading(true);
@@ -57,13 +57,13 @@ export default function CustomerFavorites() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [cafe, user]);
 
   useEffect(() => {
     if (cafe && user) {
       void loadData();
     }
-  }, [cafe, user]);
+  }, [cafe, user, loadData]);
 
   const handleAddFavorite = async () => {
     if (!cafe || !user) return;
