@@ -41,14 +41,14 @@ export default function OwnerSetup() {
     const parsed = cafeProfileSchema.safeParse({ name, slug, city, description });
     if (!parsed.success) { toast.error(parsed.error.issues[0].message); return; }
     setSaving(true);
-    const { error } = await supabase.from("cafes").insert({
+    const { error: cafeError } = await supabase.from("cafes").insert({
       name: parsed.data.name, slug: parsed.data.slug,
       city: parsed.data.city || null, description: parsed.data.description || null,
       owner_user_id: user.id, onboarding_completed: true,
       accept_online_orders: true, accept_reservations: true, loyalty_enabled: true,
     });
+    if (cafeError) { toast.error(cafeError.message); setSaving(false); return; }
     setSaving(false);
-    if (error) { toast.error(error.message); return; }
     toast.success("Cafe created!");
     navigate("/dashboard", { replace: true });
   };

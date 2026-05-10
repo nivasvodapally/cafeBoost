@@ -138,7 +138,7 @@ export default function Dashboard() {
 
   useEffect(() => { document.title = "Dashboard — CafeBoost"; }, []);
   useEffect(() => {
-    if (!loading && !cafe) navigate("/owner-setup", { replace: true });
+    if (!loading && !cafe) navigate("/for-cafes/auth", { replace: true });
   }, [cafe, loading, navigate]);
 
   const { startDate, endDate } = useMemo(() => {

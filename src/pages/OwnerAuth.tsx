@@ -1,57 +1,50 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Logo } from "@/components/Logo";
-import { ArrowLeft, Loader2, Store } from "lucide-react";
+import { ArrowLeft, Loader2, Store, Rocket, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { slugify } from "@/lib/validation";
 
 type Mode = "signin" | "signup" | "forgot";
+type SignupStep = 1 | 2;
 
-const authRedirectUrl = (path: string) => `${window.location.origin}/#${path.startsWith("/") ? path : `/${path}`}`;
-
-/**
- * Owner-only auth page (lives at /for-cafes/auth).
- * Customers should use /auth — there's a link at the bottom for misroutes.
- */
 export default function OwnerAuth() {
   const [mode, setMode] = useState<Mode>("signin");
+  const [signupStep, setSignupStep] = useState<SignupStep>(1);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [cafeName, setCafeName] = useState("");
+  const [cafeSlug, setCafeSlug] = useState("");
+  const [cafeCity, setCafeCity] = useState("");
+  const [cafeDescription, setCafeDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [forgotSent, setForgotSent] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => { document.title = "Cafe Owner Sign In — CafeBoost"; }, []);
+  const handleCafeNameChange = (value: string) => {
+    setCafeName(value);
+    if (signupStep === 2 && !cafeSlug) {
+      setCafeSlug(slugify(value));
+    }
+  };
 
-  // Redirect already-signed-in owners straight to dashboard.
-  // Uses getSession directly so it doesn't depend on AuthProvider's loading state.
-  useEffect(() => {
-    let cancel = false;
-    void supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (cancel || !session?.user) return;
-      const { data: hasOwner } = await supabase.rpc("has_role", {
-        _user_id: session.user.id, _role: "owner",
-      });
-      if (cancel) return;
-      if (!hasOwner) return;
-      const { data: cafe } = await supabase.from("cafes")
-        .select("onboarding_completed").eq("owner_user_id", session.user.id).maybeSingle();
-      if (cancel) return;
-      navigate(!cafe || !cafe.onboarding_completed ? "/owner-setup" : "/dashboard", { replace: true });
-    });
-    return () => { cancel = true; };
-  }, [navigate]);
+  const handleSignupMode = () => {
+    setMode("signup");
+    setSignupStep(1);
+    setError(null);
+  };
 
   const onForgot = async (e: React.FormEvent) => {
     e.preventDefault(); setError(null); setLoading(true);
     const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: authRedirectUrl("/reset-password"),
+      redirectTo: `${window.location.origin}/#/reset-password`,
     });
     if (err) { setError(err.message); setLoading(false); return; }
     setForgotSent(true); setLoading(false);
@@ -76,25 +69,82 @@ export default function OwnerAuth() {
           return;
         }
         toast.success("Welcome back!");
-        const { data: cafe } = await supabase.from("cafes")
-          .select("onboarding_completed").eq("owner_user_id", data.user.id).maybeSingle();
-        navigate(!cafe || !cafe.onboarding_completed ? "/owner-setup" : "/dashboard");
+        // Navigate after a short delay to let AuthProvider update roles
+        setTimeout(() => navigate("/dashboard"), 100);
       } else {
-        const { data, error: err } = await supabase.auth.signUp({
-          email: email.trim(), password,
+        // Step 1 → Step 2
+        if (signupStep === 1) {
+          if (!email.trim() || !password || !fullName.trim()) {
+            setError("Please fill in all fields");
+            setLoading(false);
+            return;
+          }
+          if (password.length < 6) {
+            setError("Password must be at least 6 characters");
+            setLoading(false);
+            return;
+          }
+          setSignupStep(2);
+          setLoading(false);
+          return;
+        }
+
+        // Step 2: Create account, then sign in, then create cafe
+        if (!cafeName.trim() || !cafeSlug.trim()) {
+          setError("Please enter your cafe name and slug");
+          setLoading(false);
+          return;
+        }
+
+        // Step A: Sign up
+        const { error: signupErr } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
           options: {
-            emailRedirectTo: authRedirectUrl("/for-cafes/auth"),
-            data: { full_name: fullName, role: "owner" },
+            data: { full_name: fullName.trim(), role: "owner" },
           },
         });
-        if (err) throw err;
-        if (data.session) {
-          toast.success("Account created — let's set up your cafe!");
-          navigate("/owner-setup");
-        } else {
-          toast.success("Check your email to confirm your account.");
-          setMode("signin");
+
+        if (signupErr) {
+          setError(signupErr.message);
+          setLoading(false);
+          return;
         }
+
+        // Step B: Sign in immediately (to ensure we have a session)
+        const { error: signInErr } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+
+        if (signInErr) {
+          setError("Account created! Please sign in to continue.");
+          setMode("signin");
+          setLoading(false);
+          return;
+        }
+
+        // Step C: Create cafe (we now have a valid session)
+        const { error: cafeErr } = await supabase.from("cafes").insert({
+          name: cafeName.trim(),
+          slug: slugify(cafeSlug.trim()),
+          city: cafeCity.trim() || null,
+          description: cafeDescription.trim() || null,
+          owner_user_id: (await supabase.auth.getSession()).data.session?.user.id,
+          onboarding_completed: true,
+          accept_online_orders: true,
+          accept_reservations: true,
+          loyalty_enabled: true,
+        });
+
+        if (cafeErr) {
+          setError("Account created! Sign in and create your cafe from the dashboard.");
+          setLoading(false);
+          return;
+        }
+
+        toast.success("Your cafe is live! Welcome to CafeBoost.");
+        setTimeout(() => navigate("/dashboard"), 100);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -160,23 +210,97 @@ export default function OwnerAuth() {
                   </form>
                 )}
               </>
+            ) : mode === "signup" ? (
+              <>
+                <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-accent-soft text-accent-foreground text-xs font-semibold mb-3">
+                  <Store className="w-3 h-3" /> Owner Portal
+                </div>
+                <h1 className="font-display text-3xl font-bold">
+                  {signupStep === 1 ? "Start your free trial" : "Set up your cafe"}
+                </h1>
+                <p className="mt-2 text-muted-foreground text-sm">
+                  {signupStep === 1
+                    ? "14-day free trial. No card required."
+                    : "Almost done — tell us about your cafe."}
+                </p>
+
+                <div className="flex items-center gap-2 mt-4">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${signupStep >= 1 ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground"}`}>1</div>
+                  <div className="flex-1 h-0.5 bg-muted" />
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${signupStep >= 2 ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground"}`}>2</div>
+                </div>
+
+                <form onSubmit={onSubmit} className="mt-6 space-y-4">
+                  {signupStep === 1 && (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="full_name">Your name</Label>
+                        <Input id="full_name" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Jane Doe" required maxLength={80} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Work email</Label>
+                        <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@cafe.com" required autoComplete="email" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="password">Password</Label>
+                        <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required minLength={6} autoComplete="new-password" />
+                      </div>
+                    </>
+                  )}
+
+                  {signupStep === 2 && (
+                    <>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => { setSignupStep(1); setError(null); }} className="-ml-2 mb-2 text-muted-foreground">
+                        ← Back
+                      </Button>
+                      <div className="space-y-2">
+                        <Label htmlFor="cafe_name">Cafe name *</Label>
+                        <Input id="cafe_name" value={cafeName} onChange={(e) => handleCafeNameChange(e.target.value)} placeholder="Aurora Coffee" required maxLength={80} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="cafe_slug">Public slug *</Label>
+                        <Input id="cafe_slug" value={cafeSlug} onChange={(e) => setCafeSlug(slugify(e.target.value))} placeholder="aurora-coffee" required maxLength={60} />
+                        <p className="text-xs text-muted-foreground">Your cafe will be at /cafe/{cafeSlug || "your-cafe"}</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="cafe_city">City</Label>
+                        <Input id="cafe_city" value={cafeCity} onChange={(e) => setCafeCity(e.target.value)} placeholder="Mumbai" maxLength={80} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="cafe_desc">Description</Label>
+                        <Input id="cafe_desc" value={cafeDescription} onChange={(e) => setCafeDescription(e.target.value)} placeholder="Specialty coffee in the heart of the city" maxLength={200} />
+                      </div>
+                    </>
+                  )}
+
+                  {error && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</p>}
+                  <Button type="submit" variant="hero" className="w-full" size="lg" disabled={loading}>
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> :
+                      signupStep === 1 ? <><ArrowRight className="w-4 h-4 mr-1" /> Continue</> : <><Rocket className="w-4 h-4 mr-1" /> Launch my cafe</>}
+                  </Button>
+                </form>
+
+                <p className="mt-6 text-sm text-center text-muted-foreground">
+                  Already have an account?{" "}
+                  <button type="button" onClick={() => { setMode("signin"); setError(null); }} className="text-accent font-semibold hover:underline">
+                    Sign in
+                  </button>
+                </p>
+
+                <div className="mt-6 pt-6 border-t border-border text-center text-xs text-muted-foreground">
+                  Are you a customer?{" "}
+                  <Link to="/auth" className="text-accent hover:underline font-medium">Use the customer sign-in →</Link>
+                </div>
+              </>
             ) : (
               <>
                 <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-accent-soft text-accent-foreground text-xs font-semibold mb-3">
                   <Store className="w-3 h-3" /> Owner Portal
                 </div>
-                <h1 className="font-display text-3xl font-bold">{mode === "signin" ? "Sign in to your cafe" : "Start your free trial"}</h1>
-                <p className="mt-2 text-muted-foreground text-sm">
-                  {mode === "signin" ? "Manage bookings, orders, loyalty & menu." : "14-day free trial. No card required."}
-                </p>
+                <h1 className="font-display text-3xl font-bold">Sign in to your cafe</h1>
+                <p className="mt-2 text-muted-foreground text-sm">Manage bookings, orders, loyalty & menu.</p>
 
                 <form onSubmit={onSubmit} className="mt-6 space-y-4">
-                  {mode === "signup" && (
-                    <div className="space-y-2">
-                      <Label htmlFor="full_name">Your name</Label>
-                      <Input id="full_name" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Jane Doe" required maxLength={80} />
-                    </div>
-                  )}
                   <div className="space-y-2">
                     <Label htmlFor="email">Work email</Label>
                     <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@cafe.com" required autoComplete="email" />
@@ -184,24 +308,22 @@ export default function OwnerAuth() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label htmlFor="password">Password</Label>
-                      {mode === "signin" && (
-                        <button type="button" onClick={() => { setMode("forgot"); setError(null); }} className="text-xs text-accent hover:underline">
-                          Forgot?
-                        </button>
-                      )}
+                      <button type="button" onClick={() => { setMode("forgot"); setError(null); }} className="text-xs text-accent hover:underline">
+                        Forgot?
+                      </button>
                     </div>
-                    <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required minLength={6} autoComplete={mode === "signin" ? "current-password" : "new-password"} />
+                    <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required autoComplete="current-password" />
                   </div>
                   {error && <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{error}</p>}
                   <Button type="submit" variant="hero" className="w-full" size="lg" disabled={loading}>
-                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : mode === "signin" ? "Sign in" : "Create account"}
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Sign in"}
                   </Button>
                 </form>
 
                 <p className="mt-6 text-sm text-center text-muted-foreground">
-                  {mode === "signin" ? "New to CafeBoost?" : "Already have an account?"}{" "}
-                  <button type="button" onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setError(null); }} className="text-accent font-semibold hover:underline">
-                    {mode === "signin" ? "Start free trial" : "Sign in"}
+                  New to CafeBoost?{" "}
+                  <button type="button" onClick={handleSignupMode} className="text-accent font-semibold hover:underline">
+                    Start free trial
                   </button>
                 </p>
 

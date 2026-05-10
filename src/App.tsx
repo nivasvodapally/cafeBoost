@@ -19,7 +19,6 @@ const OwnerAuth = lazy(() => import("./pages/OwnerAuth"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Discover = lazy(() => import("./pages/Discover"));
 const CafePublic = lazy(() => import("./pages/CafePublic"));
-const OwnerSetup = lazy(() => import("./pages/OwnerSetup"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const OwnerOrders = lazy(() => import("./pages/owner/Orders"));
 const OwnerBookings = lazy(() => import("./pages/owner/Bookings"));
@@ -112,8 +111,7 @@ const App = () => (
                 <Route path="/cafe/:slug/table/:tableNo" element={<CafePublic />} />
 
                 {/* Owner */}
-                <Route path="/owner-setup" element={<RequireRole role="owner"><OwnerSetup /></RequireRole>} />
-                <Route path="/dashboard" element={<RequireRole role="owner"><Dashboard /></RequireRole>} />
+                                <Route path="/dashboard" element={<RequireRole role="owner"><Dashboard /></RequireRole>} />
                 <Route path="/owner/orders" element={<RequireRole role="owner"><OwnerOrders /></RequireRole>} />
                 <Route path="/owner/bookings" element={<RequireRole role="owner"><OwnerBookings /></RequireRole>} />
                 <Route path="/owner/customers" element={<RequireRole role="owner"><OwnerCustomers /></RequireRole>} />
