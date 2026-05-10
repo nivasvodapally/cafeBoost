@@ -138,7 +138,7 @@ export default function CustomerOrders() {
   }, [user]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) { setLoading(false); return; }
     void fetchAll();
     const sub = supabase.channel(`customer_orders:${user.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `customer_user_id=eq.${user.id}` }, () => {
@@ -214,6 +214,20 @@ export default function CustomerOrders() {
   };
 
   if (loading) return <CustomerLayout title="My Orders"><div className="grid place-items-center h-64"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div></CustomerLayout>;
+
+  // Guest: show prompt to sign in (check before loading to avoid infinite loading state)
+  if (!user) {
+    return (
+      <CustomerLayout title="My Orders">
+        <div className="text-center py-20 bg-muted/30 rounded-3xl border border-dashed border-border px-6">
+          <ShoppingBag className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+          <p className="font-display text-xl font-bold">Sign in to view orders</p>
+          <p className="text-sm text-muted-foreground mt-2 mb-6">Track your order history and reorder easily.</p>
+          <Button onClick={() => navigate("/auth?mode=signin&returnTo=/app/orders")}>Sign in</Button>
+        </div>
+      </CustomerLayout>
+    );
+  }
 
   return (
     <CustomerLayout title="My Orders">

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,20 @@ export default function CustomerRewards() {
   };
 
   if (loading) return <CustomerLayout title="Rewards"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin" /></div></CustomerLayout>;
+
+  // Guest: show prompt to sign in
+  if (!user) {
+    return (
+      <CustomerLayout title="Rewards">
+        <div className="text-center py-20 bg-muted/30 rounded-3xl border border-dashed border-border px-6">
+          <Gift className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+          <p className="font-display text-xl font-bold">Sign in to view rewards</p>
+          <p className="text-sm text-muted-foreground mt-2 mb-6">Earn points and redeem free items.</p>
+          <Button onClick={() => navigate("/auth?mode=signin&returnTo=/app/rewards")}>Sign in</Button>
+        </div>
+      </CustomerLayout>
+    );
+  }
 
   return (
     <CustomerLayout title="Rewards" subtitle={`You have ${points} points`}>

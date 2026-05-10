@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Trash2, ShoppingBag, X, Lock, Loader2, ChevronUp, Minus, Plus, ChevronRight, UtensilsCrossed, Receipt, ChefHat } from "lucide-react";
+import { Trash2, ShoppingBag, X, Lock, Loader2, ChevronUp, Minus, Plus, UtensilsCrossed, Receipt, ChefHat } from "lucide-react";
 import { useCart } from "@/lib/cartContext";
 import { useActiveCafe } from "@/lib/cafeContext";
 import { useAuth } from "@/hooks/useAuth";
@@ -22,6 +22,7 @@ export function FloatingCart() {
   const { user, profile, loginSession } = useAuth();
   const cafe = useActiveCafe();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [tableNo, setTableNo] = useState("");
   const [lockedTable] = useState(cafe?.table ?? "");
@@ -123,24 +124,27 @@ export function FloatingCart() {
 
   if (!hasCart && !showOrderBar) return null;
 
+  // Hide cart bar on orders page
+  if (location.pathname === "/app/orders") return null;
+
   // Show order bar for just placed order (waiting for payment)
   if (justPlacedOrder && !hasCart) {
     return (
-      <div className="fixed bottom-14 lg:bottom-4 left-0 right-0 z-30 px-3">
-        <div className="mx-auto max-w-md bg-gradient-accent text-accent-foreground rounded-xl shadow-glow overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2.5">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
-                <Receipt className="w-4 h-4" />
-              </div>
-              <div className="flex flex-col items-start">
-                <p className="text-xs font-medium opacity-80">Order placed</p>
-                <p className="text-sm font-bold">₹{justPlacedOrder.total.toFixed(0)}</p>
-              </div>
+      <div className="fixed bottom-20 left-0 right-0 z-30 px-3 pointer-events-none flex items-center">
+        <div className="pointer-events-auto w-full bg-background/95 backdrop-blur-md border border-border rounded-2xl shadow-lg flex items-center justify-between h-12">
+          <div className="flex items-center gap-2 pl-3">
+            <div className="w-7 h-7 rounded-md bg-accent grid place-items-center">
+              <Receipt className="w-3.5 h-3.5 text-accent-foreground" />
             </div>
+            <div className="flex flex-col">
+              <p className="text-xs font-medium text-muted-foreground">Order placed</p>
+              <p className="text-sm font-bold">₹{justPlacedOrder.total.toFixed(0)}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 pr-3">
             <button
               onClick={() => setPaidOrder({ id: justPlacedOrder.id, total: justPlacedOrder.total })}
-              className="px-4 py-2 rounded-lg bg-white text-accent text-sm font-bold shadow-soft"
+              className="px-4 py-1.5 rounded-md bg-accent text-accent-foreground text-sm font-semibold shadow-sm hover:bg-accent/90 transition-colors"
             >
               Pay Now
             </button>
@@ -154,63 +158,61 @@ export function FloatingCart() {
   if (hasActiveOrder && !hasCart) {
     const isDone = ORDER_DONE_STATUSES.includes(activeOrder.status);
     return (
-      <div className="fixed bottom-14 lg:bottom-4 left-0 right-0 z-30 px-3">
-        <div className="mx-auto max-w-md bg-gradient-accent text-accent-foreground rounded-xl shadow-glow overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2.5">
-            <div className="flex items-center gap-3">
+      <div className="fixed bottom-20 left-0 right-0 z-30 px-3 pointer-events-none flex items-center">
+        <div className="pointer-events-auto w-full bg-background/95 backdrop-blur-md border border-border rounded-2xl shadow-lg flex items-center justify-between h-12">
+          <div className="flex items-center gap-2 pl-3">
+            <div className="w-7 h-7 rounded-md bg-accent grid place-items-center">
               {isDone ? (
-                <div className="w-8 h-8 rounded-lg bg-white/20 grid place-items-center">
-                  <UtensilsCrossed className="w-4 h-4" />
-                </div>
+                <UtensilsCrossed className="w-3.5 h-3.5 text-accent-foreground" />
               ) : (
-                <div className="w-8 h-8 rounded-lg bg-white/20 animate-pulse grid place-items-center">
-                  <ChefHat className="w-4 h-4" />
-                </div>
+                <ChefHat className="w-3.5 h-3.5 text-accent-foreground animate-pulse" />
               )}
-              <div className="flex flex-col items-start">
-                <p className="text-xs font-medium opacity-80">Order #{activeOrder.id.slice(0, 6).toUpperCase()}</p>
-                <p className="text-sm font-bold capitalize">{activeOrder.status}</p>
-              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => navigate("/app/orders")} className="text-sm font-semibold underline underline-offset-2">
-                View
-              </button>
-              <button onClick={() => { setActiveOrder(null); setOrderItems([]); }} className="w-8 h-8 rounded-lg bg-white/20 grid place-items-center">
-                <X className="w-4 h-4" />
-              </button>
+            <div className="flex flex-col">
+              <p className="text-xs font-medium text-muted-foreground">Order #{activeOrder.id.slice(0, 6).toUpperCase()}</p>
+              <p className="text-sm font-bold capitalize">{activeOrder.status}</p>
             </div>
+          </div>
+          <div className="flex items-center gap-2 pr-3">
+            <button onClick={() => navigate("/app/orders")} className="px-4 py-1.5 rounded-md bg-accent text-accent-foreground text-sm font-semibold shadow-sm hover:bg-accent/90 transition-colors">
+              View
+            </button>
+            <button onClick={() => { setActiveOrder(null); setOrderItems([]); }} className="w-7 h-7 rounded-md bg-muted grid place-items-center">
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </div>
     );
   }
 
-  // ── Slimmer Cart UI
+  // ── Cart UI
   return (
     <>
-      {/* Slim collapsed bar - modern, aligned with UI */}
+      {/* Collapsed bar */}
       {!expanded && (
-        <div className="fixed bottom-14 lg:bottom-4 left-0 right-0 z-30 px-3 pointer-events-none flex flex-col items-center">
+        <div className="fixed bottom-20 left-0 right-0 z-30 px-3 pointer-events-none flex items-center">
           <button
             onClick={() => setExpanded(true)}
-            className={`pointer-events-auto w-full max-w-md flex items-center justify-between px-4 py-2.5 rounded-xl shadow-glow transition-all duration-200 bg-gradient-accent text-accent-foreground ${
+            className={`pointer-events-auto w-full flex items-center justify-between h-12 px-3 rounded-2xl shadow-lg transition-all duration-200 bg-background/95 backdrop-blur-md border border-border ${
               justAdded ? "animate-[wiggle_0.6s_ease-in-out]" : ""
             }`}
           >
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-white/20 grid place-items-center">
-                <ShoppingBag className="w-4 h-4" />
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-md bg-accent grid place-items-center">
+                <ShoppingBag className="w-3.5 h-3.5 text-accent-foreground" />
               </div>
               <div className="flex flex-col items-start">
-                <span className="text-xs font-medium opacity-80">{count} item{count !== 1 ? 's' : ''}</span>
-                <span className="text-base font-bold">₹{total.toFixed(0)}</span>
+                <span className="text-xs font-medium text-muted-foreground">{count} item{count !== 1 ? 's' : ''}</span>
+                <span className="text-sm font-bold">₹{total.toFixed(0)}</span>
               </div>
             </div>
-            <div className="flex items-center gap-1 text-sm font-semibold">
+            <button
+              onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
+              className="px-4 py-1.5 rounded-md bg-accent text-accent-foreground text-sm font-semibold shadow-sm hover:bg-accent/90 transition-colors"
+            >
               View Cart
-              <ChevronRight className="w-4 h-4" />
-            </div>
+            </button>
           </button>
         </div>
       )}
@@ -287,10 +289,10 @@ export function FloatingCart() {
                     variant="default"
                     size="sm"
                     className="flex-1 h-9 text-xs font-bold bg-accent text-accent-foreground hover:bg-accent/90"
-                    onClick={handleCheckout}
+                    onClick={user ? handleCheckout : () => { setExpanded(false); navigate("/auth?mode=signin&returnTo=/app"); }}
                     disabled={placing}
                   >
-                    {placing ? <Loader2 className="w-3 h-3 animate-spin" /> : `Pay ₹${total.toFixed(0)}`}
+                    {placing ? <Loader2 className="w-3 h-3 animate-spin" /> : user ? `Pay ₹${total.toFixed(0)}` : "Sign in to Pay"}
                   </Button>
                 )}
               </div>

@@ -26,6 +26,20 @@ export default function CustomerBookings() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Guest: show prompt to sign in
+  if (!user) {
+    return (
+      <CustomerLayout title="My Bookings" subtitle="Manage your table reservations">
+        <div className="text-center py-20 bg-muted/30 rounded-3xl border border-dashed border-border px-6">
+          <CalendarCheck className="w-16 h-16 text-muted-foreground/20 mx-auto mb-4" />
+          <h3 className="text-xl font-display font-bold">Sign in to view bookings</h3>
+          <p className="text-muted-foreground mt-2 mb-6">Book tables and manage your reservations.</p>
+          <Button onClick={() => navigate("/auth?mode=signin&returnTo=/app/bookings")}>Sign in</Button>
+        </div>
+      </CustomerLayout>
+    );
+  }
+
   useEffect(() => {
     if (!user) return;
     const fetchBookings = async () => {

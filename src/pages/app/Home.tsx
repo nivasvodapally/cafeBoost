@@ -61,10 +61,10 @@ export default function CustomerHome() {
         <Card className="p-6 bg-gradient-accent text-accent-foreground rounded-2xl border-0">
           <p className="text-xs uppercase tracking-wider opacity-80">Welcome to</p>
           <h1 className="font-display text-2xl sm:text-3xl font-bold mt-1">{cafe.name} ☕</h1>
-          <p className="mt-1 text-sm opacity-80">{firstName ? `Hi ${firstName} — ` : ""}browse the menu, book a table, or check your rewards.</p>
+          <p className="mt-1 text-sm opacity-80">{user ? (firstName ? `Hi ${firstName} — ` : "") + "browse the menu, book a table, or check your rewards." : "Sign in to track orders, rewards, and bookings."}</p>
         </Card>
 
-        {m && (
+        {user && m ? (
           <Card className="p-5 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-accent-soft flex items-center justify-center"><Gift className="w-5 h-5 text-accent" /></div>
@@ -77,6 +77,17 @@ export default function CustomerHome() {
               <p className="text-xs text-muted-foreground">Visits</p>
               <p className="font-display text-lg font-bold">{m.total_visits}</p>
             </div>
+          </Card>
+        ) : !user && (
+          <Card className="p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center"><Gift className="w-5 h-5 text-muted-foreground" /></div>
+              <div>
+                <p className="text-sm font-semibold">Earn rewards</p>
+                <p className="text-xs text-muted-foreground">Sign in to earn points</p>
+              </div>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => navigate("/auth?mode=signin&returnTo=/app")}>Sign in</Button>
           </Card>
         )}
 
