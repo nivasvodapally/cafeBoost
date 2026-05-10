@@ -34,7 +34,7 @@ export default function OwnerSettings() {
   });
   const [saving, setSaving] = useState(false);
   // KDS device management
-  type KdsDevice = Pick<Tables<"kds_devices">, "id" | "label" | "paired_at" | "last_seen_at" | "active">;
+  type KdsDevice = Pick<Tables<"kds_devices">, "id" | "label" | "paired_at" | "last_seen_at">;
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
@@ -81,6 +81,7 @@ export default function OwnerSettings() {
       .from("kds_devices")
       .select("id, label, paired_at, last_seen_at, active")
       .eq("cafe_id", cafe.id)
+      .eq("active", true)
       .order("paired_at", { ascending: false })
       .then(({ data }: { data: KdsDevice[] | null }) => {
         if (!cancel) setDevices(data ?? []);
@@ -121,9 +122,9 @@ export default function OwnerSettings() {
 
   const revokeDevice = async (id: string) => {
     if (!confirm("Sign this kitchen device out? It will need to pair again.")) return;
-    const { error } = await supabase.from("kds_devices").update({ active: false }).eq("id", id);
+    const { error } = await supabase.from("kds_devices").delete().eq("id", id);
     if (error) { toast.error(error.message); return; }
-    setDevices((d) => d.map((x) => x.id === id ? { ...x, active: false } : x));
+    setDevices((d) => d.filter((x) => x.id !== id));
     toast.success("Device revoked");
   };
 
@@ -346,12 +347,12 @@ export default function OwnerSettings() {
               ) : (
                 <div className="space-y-2">
                   {devices.map((d) => (
-                    <div key={d.id} className={`flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 ${!d.active ? "opacity-60" : ""}`}>
+                    <div key={d.id} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
                       <div className="min-w-0">
-                        <p className="font-semibold text-sm">{d.label || "Kitchen tablet"} {!d.active && <span className="text-[10px] uppercase text-muted-foreground ml-1">(revoked)</span>}</p>
+                        <p className="font-semibold text-sm">{d.label || "Kitchen tablet"}</p>
                         <p className="text-[11px] text-muted-foreground">Paired {new Date(d.paired_at).toLocaleString()} · last seen {d.last_seen_at ? new Date(d.last_seen_at).toLocaleString() : "never"}</p>
                       </div>
-                      {d.active && <Button variant="ghost" size="sm" onClick={() => revokeDevice(d.id)}>Revoke</Button>}
+                      <Button variant="ghost" size="sm" onClick={() => revokeDevice(d.id)}>Revoke</Button>
                     </div>
                   ))}
                 </div>

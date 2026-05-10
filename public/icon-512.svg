@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#0f172a" rx="96"/>
-  <circle cx="256" cy="256" r="160" fill="#ffffff"/>
-  <path d="M256 146 L256 366 M146 256 L366 256" stroke="#0f172a" stroke-width="32" stroke-linecap="round"/>
-  <circle cx="256" cy="256" r="54" fill="#0f172a"/>
-  <text x="256" y="430" text-anchor="middle" fill="#ffffff" font-family="Arial, sans-serif" font-size="48" font-weight="bold">CafeBoost</text>
-</svg>

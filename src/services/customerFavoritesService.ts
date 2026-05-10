@@ -38,6 +38,7 @@ export class CustomerFavoritesService {
 
     /**
      * Add a menu item to favorites
+     * Uses upsert to handle the case where the item is already favorited (no 409 error).
      */
     static async addFavorite(
         menuItemId: string,
@@ -51,12 +52,13 @@ export class CustomerFavoritesService {
 
         const { data, error } = await supabase
             .from('customer_favorites')
-            .insert({
+            .upsert({
                 customer_id: userId,
                 cafe_id: cafeId,
                 menu_item_id: menuItemId,
-                notes: notes || null
-            })
+                notes: notes || null,
+                added_at: new Date().toISOString()
+            }, { onConflict: 'customer_id,cafe_id,menu_item_id', ignoreDuplicates: true })
             .select()
             .single();
 

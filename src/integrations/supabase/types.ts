@@ -740,6 +740,52 @@ export type Database = {
           },
         ]
       }
+      customer_visits: {
+        Row: {
+          cafe_id: string
+          counted_at: string
+          customer_id: string
+          id: string
+          login_session_id: string
+        }
+        Insert: {
+          cafe_id: string
+          counted_at?: string
+          customer_id: string
+          id?: string
+          login_session_id: string
+        }
+        Update: {
+          cafe_id?: string
+          counted_at?: string
+          customer_id?: string
+          id?: string
+          login_session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_visits_cafe_id_fkey"
+            columns: ["cafe_id"]
+            isOneToOne: false
+            referencedRelation: "cafes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_visits_cafe_id_fkey"
+            columns: ["cafe_id"]
+            isOneToOne: false
+            referencedRelation: "cafes_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_visits_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       kds_devices: {
         Row: {
           active: boolean
@@ -1161,6 +1207,7 @@ export type Database = {
           eta_updated_at: string | null
           id: string
           invoice_number: string | null
+          login_session_id: string | null
           modification_reason: string | null
           modified_at: string | null
           modified_by: string | null
@@ -1223,6 +1270,7 @@ export type Database = {
           eta_updated_at?: string | null
           id?: string
           invoice_number?: string | null
+          login_session_id?: string | null
           modification_reason?: string | null
           modified_at?: string | null
           modified_by?: string | null
@@ -1285,6 +1333,7 @@ export type Database = {
           eta_updated_at?: string | null
           id?: string
           invoice_number?: string | null
+          login_session_id?: string | null
           modification_reason?: string | null
           modified_at?: string | null
           modified_by?: string | null
@@ -2110,17 +2159,6 @@ export type Database = {
         Args: { _cafe_id: string; _code: string }
         Returns: Json
       }
-      call_staff: {
-        Args: {
-          _cafe_id: string
-          _customer_name: string
-          _message?: string
-          _order_id: string
-          _table_no: string
-        }
-        Returns: Json
-      }
-      can_modify_order: { Args: { order_id: string }; Returns: boolean }
       can_user_act_on: {
         Args: { _action: string; _cafe_id: string; _user_id: string }
         Returns: boolean
@@ -2553,15 +2591,6 @@ export type Database = {
         Args: { _email: string; _new_user_id: string; _phone: string }
         Returns: number
       }
-      modify_order: {
-        Args: {
-          modification_reason?: string
-          modified_by_user_id?: string
-          new_items: Json
-          order_id: string
-        }
-        Returns: string
-      }
       onboard_new_cafe: {
         Args: {
           _city: string
@@ -2595,19 +2624,47 @@ export type Database = {
         }
         Returns: string
       }
-      place_order_and_update_loyalty: {
-        Args: {
-          _cafe_id: string
-          _customer_name: string
-          _customer_phone: string
-          _customer_user_id: string
-          _items: Json
-          _notes: string
-          _source: Database["public"]["Enums"]["order_source"]
-          _table_no: string
-        }
-        Returns: Json
-      }
+      place_order_and_update_loyalty:
+        | {
+            Args: {
+              _cafe_id: string
+              _customer_name: string
+              _customer_phone: string
+              _customer_user_id: string
+              _items: Json
+              _notes: string
+              _source: Database["public"]["Enums"]["order_source"]
+              _table_no: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              _cafe_id: string
+              _customer_name: string
+              _customer_phone: string
+              _customer_user_id: string
+              _items: Json
+              _notes: string
+              _source: string
+              _table_no: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              _cafe_id: string
+              _customer_name: string
+              _customer_phone: string
+              _customer_user_id: string
+              _items: Json
+              _login_session_id?: string
+              _notes: string
+              _source: string
+              _table_no: string
+            }
+            Returns: Json
+          }
       process_order_refund: { Args: { _order_id: string }; Returns: Json }
       promote_waitlist_booking: {
         Args: { _booking_id: string }
@@ -2675,19 +2732,6 @@ export type Database = {
       simulate_payment: {
         Args: { _order_id: string; _outcome: string }
         Returns: Json
-      }
-      split_bill: {
-        Args: {
-          order_id: string
-          split_details: Json
-          split_type: string
-          user_id: string
-        }
-        Returns: string
-      }
-      split_order: {
-        Args: { order_id: string; split_instructions: Json }
-        Returns: string[]
       }
       start_break: { Args: never; Returns: Json }
       start_order_timer: {

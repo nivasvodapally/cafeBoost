@@ -1,164 +1,42 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, Plus, Minus, Search, UtensilsCrossed, Trash2, Lock, Heart } from "lucide-react";
+import { Loader2, Plus, Minus, Search, UtensilsCrossed } from "lucide-react";
 import { useActiveCafe, setActiveTable } from "@/lib/cafeContext";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { placeOrder } from "@/services/orderService";
-import { PaymentDialog } from "@/components/PaymentDialog";
-import { CustomerFavoritesService } from "@/services/customerFavoritesService";
+import { useCart } from "@/lib/cartContext";
 
 type MenuItem = { id: string; category: string; name: string; description: string | null; price: number; tags: string[] | null; available: boolean };
-type CartItem = MenuItem & { qty: number };
-
-const CART_KEY = (cafeId: string) => `cafeboost:cart:${cafeId}`;
 
 export default function CustomerMenu() {
   const cafe = useActiveCafe();
-  const { user, profile, loginSession } = useAuth();
+  const { user } = useAuth();
+  const { cart, add, inc, dec, total } = useCart();
   const navigate = useNavigate();
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeCat, setActiveCat] = useState<string>("All");
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [ordering, setOrdering] = useState(false);
-  const [newOrder, setNewOrder] = useState<{ id: string; total: number } | null>(null);
-  const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  // Table number — locked if customer scanned a per-table QR.
-  const lockedTable = cafe?.table ?? null;
-  const [tableNo, setTableNo] = useState<string>(lockedTable ?? "");
-  useEffect(() => { if (lockedTable) setTableNo(lockedTable); }, [lockedTable]);
 
-  useEffect(() => { if (!cafe) { navigate("/discover"); } }, [cafe, navigate]);
-
-  // Load favorites
-  const loadFavorites = useCallback(async () => {
-    if (!cafe || !user) return;
-    try {
-      const favoritesList = await CustomerFavoritesService.getFavorites(cafe.id);
-      const favoriteIds = new Set(favoritesList.map(f => f.menu_item_id));
-      setFavorites(favoriteIds);
-    } catch (error) {
-      console.error('Failed to load favorites:', error);
-    }
-  }, [cafe, user]);
+  useEffect(() => { if (!cafe) navigate("/discover"); }, [cafe, navigate]);
 
   useEffect(() => {
     if (!cafe) return;
-    let cancelled = false;
     setLoading(true);
-    
-    // Load menu items
-    void supabase.from("menu_items").select("id, category, name, description, price, tags, available")
+    void supabase.from("menu_items")
+      .select("id, category, name, description, price, tags, available")
       .eq("cafe_id", cafe.id).order("category").order("name")
-      .then(({ data }) => { if (!cancelled) { setItems((data as MenuItem[]) ?? []); setLoading(false); } });
-    
-    // Load cart
-    try {
-      const raw = localStorage.getItem(CART_KEY(cafe.id));
-      if (raw) setCart(JSON.parse(raw));
-    } catch { /* ignore */ }
-    
-    // Load favorites
-    if (user) {
-      loadFavorites();
-    }
-    
-    return () => { cancelled = true; };
-  }, [cafe, user, loadFavorites]);
-
-  useEffect(() => {
-    if (!cafe) return;
-    try { localStorage.setItem(CART_KEY(cafe.id), JSON.stringify(cart)); } catch { /* ignore */ }
-  }, [cart, cafe]);
-
-  const add = (it: MenuItem) => {
-    if (!it.available) { toast.error(`${it.name} is unavailable`); return; }
-    setCart(p => {
-      const ex = p.find(c => c.id === it.id);
-      return ex ? p.map(c => c.id === it.id ? { ...c, qty: c.qty + 1 } : c) : [...p, { ...it, qty: 1 }];
-    });
-  };
-  const dec = (id: string) => setCart(p => p.map(c => c.id === id ? { ...c, qty: c.qty - 1 } : c).filter(c => c.qty > 0));
-  const removeLine = (id: string) => setCart(p => p.filter(c => c.id !== id));
-  const clearCart = () => setCart([]);
-
-  const toggleFavorite = async (item: MenuItem) => {
-    if (!cafe || !user) {
-      toast.error("Please sign in to save favorites");
-      return;
-    }
-    
-    try {
-      const isCurrentlyFavorite = favorites.has(item.id);
-      
-      if (isCurrentlyFavorite) {
-        // Remove from favorites
-        await CustomerFavoritesService.removeFavoriteByMenuItem(item.id, cafe.id);
-        setFavorites(prev => {
-          const next = new Set(prev);
-          next.delete(item.id);
-          return next;
-        });
-        toast.success("Removed from favorites");
-      } else {
-        // Add to favorites
-        await CustomerFavoritesService.addFavorite(item.id, cafe.id, `Favorite: ${item.name}`);
-        setFavorites(prev => new Set([...prev, item.id]));
-        toast.success("Added to favorites");
-      }
-    } catch (error: unknown) {
-      console.error('Failed to toggle favorite:', error);
-      toast.error((error as Error).message || "Failed to update favorites");
-    }
-  };
-
-  const submitOrder = async () => {
-    if (!cafe || cart.length === 0 || ordering) return;
-    if (!user) {
-      navigate(`/auth?mode=signup&returnTo=${encodeURIComponent(`/app/menu`)}`);
-      return;
-    }
-    setOrdering(true);
-    try {
-      const customerName = profile?.full_name ?? user.email ?? "Guest";
-      const result = await placeOrder({
-        cafeId: cafe.id,
-        customerUserId: user.id,
-        customerName,
-        customerPhone: profile?.phone ?? null,
-        cart: cart.map(c => ({ id: c.id, qty: c.qty })),
-        source: lockedTable ? "table" : "qr",
-        tableNo: tableNo.trim() || null,
-        loginSession,
-      });
-      setCart([]);
-      try { localStorage.removeItem(CART_KEY(cafe.id)); } catch { /* ignore */ }
-      toast.success(`Order placed · ₹${result.totalAmount.toFixed(2)}`);
-      setNewOrder({ id: result.id, total: result.totalAmount });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not place order");
-    } finally {
-      setOrdering(false);
-    }
-  };
-
-  const clearTable = () => { setTableNo(""); setActiveTable(null); };
+      .then(({ data }) => { setItems((data as MenuItem[]) ?? []); setLoading(false); });
+  }, [cafe]);
 
   const filtered = useMemo(() => {
-    return items.filter(i => {
-      const matchCat = activeCat === "All" || i.category === activeCat;
-      const matchSearch = !search ||
-        i.name.toLowerCase().includes(search.toLowerCase()) ||
-        i.category.toLowerCase().includes(search.toLowerCase());
-      return matchCat && matchSearch;
-    });
+    const q = search.toLowerCase();
+    return items.filter(i => (activeCat === "All" || i.category === activeCat) && (!q || i.name.toLowerCase().includes(q) || i.category.toLowerCase().includes(q)));
   }, [items, search, activeCat]);
   const cats = useMemo(() => ["All", ...Array.from(new Set(items.map(i => i.category)))], [items]);
   const grouped = useMemo(() => {
@@ -169,7 +47,11 @@ export default function CustomerMenu() {
     });
     return g;
   }, [filtered]);
-  const subtotal = cart.reduce((s, c) => s + Number(c.price) * c.qty, 0);
+
+  const handleAdd = (item: MenuItem) => {
+    if (!item.available) { toast.error(`${item.name} is unavailable`); return; }
+    add(item as any);
+  };
 
   if (loading) return <CustomerLayout title="Menu"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin" /></div></CustomerLayout>;
 
@@ -182,16 +64,10 @@ export default function CustomerMenu() {
       {items.length > 0 && (
         <div className="flex gap-2 overflow-x-auto pb-3 mb-3 -mx-4 px-4 scrollbar-none">
           {cats.map(c => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setActiveCat(c)}
-              className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-smooth ${
-                activeCat === c
-                  ? "bg-accent text-accent-foreground shadow-soft"
-                  : "bg-muted text-muted-foreground hover:bg-muted/70"
-              }`}
-            >{c}</button>
+            <button key={c} type="button" onClick={() => setActiveCat(c)}
+              className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-smooth ${activeCat === c ? "bg-accent text-accent-foreground shadow-soft" : "bg-muted text-muted-foreground hover:bg-muted/70"}`}>
+              {c}
+            </button>
           ))}
         </div>
       )}
@@ -202,7 +78,6 @@ export default function CustomerMenu() {
           <h3 className="font-display text-lg font-bold mb-3">{cat}</h3>
           <div className="space-y-2">{list.map(item => {
             const inCart = cart.find(c => c.id === item.id);
-            const isFavorite = favorites.has(item.id);
             return (
               <Card key={item.id} className={`p-4 flex items-center justify-between ${!item.available ? "opacity-50" : ""}`}>
                 <div className="min-w-0 flex-1 mr-3">
@@ -210,94 +85,24 @@ export default function CustomerMenu() {
                   {item.description && <p className="text-xs text-muted-foreground line-clamp-2">{item.description}</p>}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => toggleFavorite(item)}
-                    aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                  >
-                    <Heart className={`w-4 h-4 ${isFavorite ? "fill-red-500 text-red-500" : "text-muted-foreground"}`} />
-                  </Button>
                   <p className="text-sm font-semibold">₹{Number(item.price).toFixed(2)}</p>
                   {inCart ? (
                     <div className="flex items-center gap-2">
                       <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => dec(item.id)}><Minus className="w-3 h-3" /></Button>
                       <span className="text-sm font-bold w-5 text-center">{inCart.qty}</span>
-                      <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => add(item)} disabled={!item.available}><Plus className="w-3 h-3" /></Button>
+                      <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => inc(item.id)} disabled={!item.available}><Plus className="w-3 h-3" /></Button>
                     </div>
-                  ) : <Button variant="outline" size="sm" onClick={() => add(item)} disabled={!item.available}><Plus className="w-3 h-3 mr-1" /> Add</Button>}
+                  ) : (
+                    <Button variant="outline" size="sm" onClick={() => handleAdd(item)} disabled={!item.available}>
+                      <Plus className="w-3 h-3 mr-1" /> Add
+                    </Button>
+                  )}
                 </div>
               </Card>
             );
           })}</div>
         </div>
       ))}
-
-      {cart.length > 0 && (
-        <div className="fixed bottom-20 left-0 right-0 lg:bottom-4 z-20 px-4">
-          <Card className="max-w-3xl mx-auto p-4 shadow-elegant bg-card">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">{cart.reduce((s, c) => s + c.qty, 0)} items in cart</p>
-                <p className="font-display text-lg font-bold">₹{subtotal.toFixed(2)}</p>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="ghost" size="icon" onClick={clearCart} aria-label="Clear cart"><Trash2 className="w-4 h-4 text-muted-foreground" /></Button>
-                <Button variant="hero" onClick={submitOrder} disabled={ordering}>
-                  {ordering ? <Loader2 className="w-4 h-4 animate-spin" /> : "Place Order"}
-                </Button>
-              </div>
-            </div>
-            <div className="mt-3 flex items-center gap-2">
-              <label htmlFor="table-no" className="text-xs font-semibold text-muted-foreground shrink-0">Table</label>
-              <Input
-                id="table-no"
-                value={tableNo}
-                onChange={(e) => setTableNo(e.target.value)}
-                placeholder={lockedTable ? "" : "Optional · e.g. 5"}
-                disabled={!!lockedTable}
-                maxLength={10}
-                className="h-8 text-sm"
-              />
-              {lockedTable ? (
-                <span className="inline-flex items-center gap-1 text-xs font-semibold text-accent-foreground bg-accent-soft px-2 py-1 rounded-full shrink-0" title="Set by table QR">
-                  <Lock className="w-3 h-3" /> from QR
-                </span>
-              ) : tableNo ? (
-                <button onClick={clearTable} className="text-xs text-muted-foreground hover:text-foreground shrink-0">Clear</button>
-              ) : null}
-            </div>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {cart.map(c => (
-                <button key={c.id} onClick={() => removeLine(c.id)} className="text-xs bg-muted hover:bg-muted/70 px-2 py-1 rounded-full text-muted-foreground">
-                  {c.qty}× {c.name}
-                </button>
-              ))}
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* Place Order button — auth check happens in submitOrder */}
-
-      {newOrder && (
-        <PaymentDialog
-          open={!!newOrder}
-          onOpenChange={(v) => {
-            if (!v) {
-              setNewOrder(null);
-              navigate("/app/orders");
-            }
-          }}
-          orderId={newOrder.id}
-          cafeId={cafe!.id}
-          cafeName={cafe!.name}
-          amount={newOrder.total}
-          customerName={profile?.full_name ?? user?.email ?? "Guest"}
-          customerPhone={profile?.phone}
-        />
-      )}
     </CustomerLayout>
   );
 }

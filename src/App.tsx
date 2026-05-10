@@ -9,6 +9,8 @@ import { RequireStaff } from "@/components/RequireStaff";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/hooks/useAuth";
 import { GuestSessionGuard } from "@/components/GuestSessionGuard";
+import { CartProvider } from "@/lib/cartContext";
+import { FloatingCart } from "@/components/FloatingCart";
 
 const CustomerLanding = lazy(() => import("./pages/CustomerLanding"));
 const Landing = lazy(() => import("./pages/Landing")); // SaaS landing for cafe owners
@@ -49,13 +51,39 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 300_000, // Increased from 120s to 300s (5 minutes) for better performance
-      gcTime: 600_000, // 10 minutes cache time (default is 5 minutes, increased for better cache)
+      staleTime: 300_000,
+      gcTime: 600_000,
       refetchOnWindowFocus: false,
       retry: 1,
     }
   },
 });
+
+const CustomerAppRoutes = () => (
+  <CartProvider>
+    <ErrorBoundary>
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        </div>
+      }>
+        <Routes>
+          <Route path="/app" element={<RequireRole role="customer"><CustomerHome /></RequireRole>} />
+          <Route path="/app/menu" element={<RequireRole role="customer"><CustomerMenu /></RequireRole>} />
+          <Route path="/app/orders" element={<RequireRole role="customer"><CustomerOrders /></RequireRole>} />
+          <Route path="/app/profile" element={<RequireRole role="customer"><CustomerProfile /></RequireRole>} />
+          <Route path="/app/rewards" element={<RequireRole role="customer"><CustomerRewards /></RequireRole>} />
+          <Route path="/app/book" element={<RequireRole role="customer"><CustomerBook /></RequireRole>} />
+          <Route path="/app/bookings" element={<RequireRole role="customer"><CustomerBookings /></RequireRole>} />
+          <Route path="/app/favorites" element={<RequireRole role="customer"><CustomerFavorites /></RequireRole>} />
+          <Route path="/app/orders/:id/invoice" element={<RequireRole role="customer"><CustomerInvoice /></RequireRole>} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+        <FloatingCart />
+      </Suspense>
+    </ErrorBoundary>
+  </CartProvider>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -107,18 +135,8 @@ const App = () => (
                 {/* KDS — paired kitchen device, no login */}
                 <Route path="/kds" element={<KDSPage />} />
 
-                {/* Customer (includes guest/anonymous users) */}
-                <Route path="/app" element={<RequireRole role="customer"><CustomerHome /></RequireRole>} />
-                <Route path="/app/menu" element={<RequireRole role="customer"><CustomerMenu /></RequireRole>} />
-                <Route path="/app/orders" element={<RequireRole role="customer"><CustomerOrders /></RequireRole>} />
-                <Route path="/app/profile" element={<RequireRole role="customer"><CustomerProfile /></RequireRole>} />
-                <Route path="/app/rewards" element={<RequireRole role="customer"><CustomerRewards /></RequireRole>} />
-                <Route path="/app/book" element={<RequireRole role="customer"><CustomerBook /></RequireRole>} />
-                <Route path="/app/bookings" element={<RequireRole role="customer"><CustomerBookings /></RequireRole>} />
-                <Route path="/app/favorites" element={<RequireRole role="customer"><CustomerFavorites /></RequireRole>} />
-                <Route path="/app/orders/:id/invoice" element={<RequireRole role="customer"><CustomerInvoice /></RequireRole>} />
-
-                <Route path="*" element={<NotFound />} />
+                {/* Customer — wrapped with CartProvider + FloatingCart */}
+                <Route path="/*" element={<CustomerAppRoutes />} />
               </Routes>
             </Suspense>
           </ErrorBoundary>

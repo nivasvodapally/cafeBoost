@@ -1,7 +1,7 @@
 const PlaceholderIndex = () => {
   return (
     <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img src="/placeholder.svg" alt="CafeBoost" />
+      <img src="/favicon.png" alt="CafeBoost" className="w-24 h-24" />
     </div>
   );
 };
