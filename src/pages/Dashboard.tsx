@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { OwnerLayout } from "@/components/OwnerLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { IndianRupee, ShoppingBag, TrendingUp, Users, ArrowRight, Clock, Coffee, Calendar, BarChart3, ChefHat, Loader2, TrendingDown, Minus, DollarSign, Zap, Award } from "lucide-react";
+import { IndianRupee, ShoppingBag, TrendingUp, Users, ArrowRight, Clock, Coffee, Calendar, BarChart3, ChefHat, Loader2, TrendingDown, Minus, DollarSign, Zap, Award, RefreshCw } from "lucide-react";
 import { useOwnerCafe } from "@/hooks/useOwnerCafe";
 import { supabase } from "@/integrations/supabase/client";
 import {
