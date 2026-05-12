@@ -33,20 +33,20 @@ function createSupabaseClient() {
    *   7. BroadcastChannel is DISABLED — other tabs' events never interfere.
    */
 
-  const REGISTRY_KEY = 'cafeboost:auth:registry'; // localStorage: { tabId -> session }
-  const TAB_ID_KEY   = 'cafeboost:auth:tabid';   // sessionStorage: my tab's UUID
-  const STORE_VERSION = 'v1';                    // bump to invalidate all stale data
+  const TAB_ID_KEY = 'cafeboost:auth:tabid';
+  const STORE_VERSION = 'v1';
 
-  // Get or create my tab's unique ID.
-  //
-  // sessionStorage in Chromium-based browsers is scoped to the BROWSER WINDOW,
-  // not individual tabs. Tabs within the same window share sessionStorage.
-  // Tabs in DIFFERENT windows have independent sessionStorage.
-  //
-  // So: Window A = one ID (owner), Window B = different ID (guest) ✓
-  // And: Tab 1 + Tab 2 in same window = same ID (acceptable — same browser context).
-  //
-  // This gives us true window-level isolation without BroadcastChannel.
+  /**
+   * Tab-scoped session storage.
+   *
+   * Problem: Supabase's default storage key ("supabase-auth-token") is shared
+   * across ALL tabs. This clobbers sessions if one tab is a Guest and another
+   * is an Owner.
+   *
+   * Solution: We use sessionStorage (which survives reloads but is scoped to the tab)
+   * and a unique storageKey per tab. This ensures true isolation without leaking
+   * data into localStorage.
+   */
   function getMyTabId(): string {
     try {
       let id = sessionStorage.getItem(TAB_ID_KEY);
@@ -60,68 +60,10 @@ function createSupabaseClient() {
     }
   }
 
-  function getRegistry(): Record<string, string | null> {
-    try {
-      const raw = localStorage.getItem(REGISTRY_KEY);
-      return raw ? JSON.parse(raw) : {};
-    } catch {
-      return {};
-    }
-  }
-
-  function saveRegistry(reg: Record<string, string | null>) {
-    try {
-      localStorage.setItem(REGISTRY_KEY, JSON.stringify(reg));
-    } catch {
-      // localStorage full or unavailable — ignore.
-    }
-  }
-
-  // Custom storage adapter: reads/writes only this tab's bucket.
-  const tabStorage: Record<string, (key: string, value?: string | null) => string | null> & { removeItem(key: string): void } = {
-    getItem(key: string): string | null {
-      const myTabId = getMyTabId();
-      const reg = getRegistry();
-      const bucket = reg[myTabId];
-      if (!bucket) return null;
-      try {
-        const parsed = JSON.parse(bucket) as Record<string, string | null>;
-        return parsed[key] ?? null;
-      } catch {
-        return null;
-      }
-    },
-    setItem(key: string, value: string): void {
-      const myTabId = getMyTabId();
-      const reg = getRegistry();
-      let bucket: Record<string, string | null>;
-      try {
-        bucket = reg[myTabId] ? JSON.parse(reg[myTabId]!) : {};
-      } catch {
-        bucket = {};
-      }
-      bucket[key] = value;
-      reg[myTabId] = JSON.stringify(bucket);
-      saveRegistry(reg);
-    },
-    removeItem(key: string): void {
-      const myTabId = getMyTabId();
-      const reg = getRegistry();
-      let bucket: Record<string, string | null>;
-      try {
-        bucket = reg[myTabId] ? JSON.parse(reg[myTabId]!) : {};
-      } catch {
-        bucket = {};
-      }
-      delete bucket[key];
-      reg[myTabId] = JSON.stringify(bucket);
-      saveRegistry(reg);
-    },
-  };
-
   return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     auth: {
-      storage: tabStorage,
+      storage: typeof window !== 'undefined' ? window.sessionStorage : undefined,
+      storageKey: `sb-${getMyTabId()}-auth-token`,
       persistSession: true,
       autoRefreshToken: true,
       // CRITICAL: disable BroadcastChannel so sign-in/sign-out in one tab

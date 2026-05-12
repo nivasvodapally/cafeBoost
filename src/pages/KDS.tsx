@@ -41,11 +41,20 @@ function PairingScreen({ onPaired }: { onPaired: (token: string, label: string |
       if (!pin.trim()) { toast.error("Enter the PIN"); return; }
     }
     setBusy(true);
-    const { data, error } = await supabase.rpc("kds_pair_device_v2", {
+    
+    // Stable browser identifier for server-side rate limiting
+    let pairingId = localStorage.getItem("cafeboost:kds:pairingId");
+    if (!pairingId) {
+      pairingId = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
+      localStorage.setItem("cafeboost:kds:pairingId", pairingId);
+    }
+
+    const { data, error } = await supabase.rpc("kds_pair_device_v3", {
         _code: mode === "code" ? code.trim() : null,
         _pin: mode === "pin" ? pin.trim() : null,
         _slug: mode === "pin" ? slug.trim().toLowerCase() : null,
         _label: label,
+        _identifier: pairingId,
       });
     setBusy(false);
     const paired = data as { token: string } | null;

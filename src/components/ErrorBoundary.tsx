@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import * as Sentry from "@sentry/react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle } from "lucide-react";
@@ -16,8 +17,9 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, info: unknown) {
+  componentDidCatch(error: Error, info: any) {
     console.error("ErrorBoundary caught:", error, info);
+    Sentry.captureException(error, { extra: info });
   }
 
   reset = () => {
@@ -26,20 +28,23 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
   };
 
   render() {
-    if (!this.state.hasError) return this.props.children;
-    return (
-      <div className="min-h-screen grid place-items-center bg-gradient-hero p-4">
-        <Card className="max-w-md w-full p-8 text-center">
-          <AlertTriangle className="w-10 h-10 text-destructive mx-auto mb-4" />
-          <h1 className="font-display text-2xl font-bold">Something went wrong</h1>
-          <p className="text-sm text-muted-foreground mt-2">
-            An unexpected error broke this page. Reload to try again.
-          </p>
-          <Button variant="hero" className="mt-6 w-full" onClick={this.reset}>
-            Reload page
-          </Button>
-        </Card>
-      </div>
-    );
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen grid place-items-center bg-gradient-hero p-4">
+          <Card className="max-w-md w-full p-8 text-center">
+            <AlertTriangle className="w-10 h-10 text-destructive mx-auto mb-4" />
+            <h1 className="font-display text-2xl font-bold">Something went wrong</h1>
+            <p className="text-sm text-muted-foreground mt-2">
+              An unexpected error broke this page. Reload to try again.
+            </p>
+            <Button variant="hero" className="mt-6 w-full" onClick={this.reset}>
+              Reload page
+            </Button>
+          </Card>
+        </div>
+      );
+    }
+
+    return this.props.children;
   }
 }
