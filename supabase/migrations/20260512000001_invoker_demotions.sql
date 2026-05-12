@@ -12,7 +12,7 @@ ALTER FUNCTION public.has_cafe_staff_role(uuid, uuid, public.app_role) SECURITY 
 ALTER FUNCTION public.check_slot_availability(uuid, date, text) SECURITY INVOKER;
 
 -- 3. Cafe Operations
-ALTER FUNCTION public.get_cafe_public(text) SECURITY INVOKER;
+ALTER FUNCTION public.get_cafe_public(uuid) SECURITY INVOKER;
 
 -- 4. Analytics
 ALTER FUNCTION public.get_owner_analytics(uuid, date, date) SECURITY INVOKER;
