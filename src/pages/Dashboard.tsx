@@ -149,19 +149,35 @@ export default function Dashboard() {
 
   const daysInPeriod = range === "7d" ? 7 : range === "30d" ? 30 : 90;
 
-  useEffect(() => {
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchAnalytics = async () => {
     if (!cafe) return;
     setLoadingStats(true);
-    const fetchAnalytics = async () => {
-      const { data, error } = await supabase.rpc("get_owner_analytics", {
-        _cafe_id: cafe.id,
-        _start: startDate,
-        _end: endDate,
-      });
-      if (error) { console.error("[Dashboard] analytics error:", error); }
-      else { setRpcData(data); }
-      setLoadingStats(false);
-    };
+    const { data, error } = await supabase.rpc("get_owner_analytics", {
+      _cafe_id: cafe.id,
+      _start: startDate,
+      _end: endDate,
+    });
+    if (error) { console.error("[Dashboard] analytics error:", error); }
+    else { setRpcData(data); }
+    setLoadingStats(false);
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    const { error } = await supabase.rpc("refresh_cafe_analytics");
+    if (error) {
+      toast.error("Failed to refresh analytics");
+      console.error(error);
+    } else {
+      await fetchAnalytics();
+      toast.success("Analytics updated");
+    }
+    setRefreshing(false);
+  };
+
+  useEffect(() => {
     void fetchAnalytics();
   }, [cafe, startDate, endDate]);
 
@@ -205,13 +221,25 @@ export default function Dashboard() {
   return (
     <OwnerLayout title={`Welcome back${cafe?.name ? `, ${cafe.name}` : ""}`} subtitle="Here's what's happening across your cafe.">
       {/* Period selector */}
-      <div className="flex items-center gap-2 mb-5">
-        {(["7d", "30d", "90d"] as Range[]).map(r => (
-          <button key={r} type="button" onClick={() => setRange(r)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-smooth ${range === r ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:bg-muted/70"}`}>
-            Last {r === "7d" ? "7 days" : r === "30d" ? "30 days" : "90 days"}
-          </button>
-        ))}
+      <div className="flex items-center justify-between gap-2 mb-5">
+        <div className="flex items-center gap-2">
+          {(["7d", "30d", "90d"] as Range[]).map(r => (
+            <button key={r} type="button" onClick={() => setRange(r)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-smooth ${range === r ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:bg-muted/70"}`}>
+              Last {r === "7d" ? "7 days" : r === "30d" ? "30 days" : "90 days"}
+            </button>
+          ))}
+        </div>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          className="h-8 text-xs gap-1.5 font-bold"
+          onClick={handleRefresh}
+          disabled={refreshing}
+        >
+          {refreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          Refresh
+        </Button>
       </div>
 
       {/* KPI tiles */}
