@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { OwnerLayout } from "@/components/OwnerLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,25 +10,28 @@ import { useOwnerCafe } from "@/hooks/useOwnerCafe";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { menuItemSchema } from "@/lib/validation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 type MenuItem = { id: string; category: string; name: string; description: string | null; price: number; tags: string[] | null; available: boolean };
 
 export default function OwnerMenu() {
   const { cafe, loading: cafeLoading } = useOwnerCafe();
-  const [items, setItems] = useState<MenuItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [draft, setDraft] = useState({ category: "", name: "", description: "", price: 0 });
   const [editing, setEditing] = useState<MenuItem | null>(null);
   const [editForm, setEditForm] = useState({ category: "", name: "", description: "", price: 0 });
   const [editSaving, setEditSaving] = useState(false);
 
-  useEffect(() => {
-    if (!cafe) return;
-    void supabase.from("menu_items").select("id, category, name, description, price, tags, available")
-      .eq("cafe_id", cafe.id).order("category").order("name")
-      .then(({ data }) => { setItems((data as MenuItem[]) ?? []); setLoading(false); })
-      .catch((err) => { console.error("Failed to load menu items:", err); setLoading(false); toast.error("Failed to load menu items"); });
-  }, [cafe]);
+  const { data: items = [], isLoading } = useQuery({
+    queryKey: ["menu_items", cafe?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("menu_items").select("id, category, name, description, price, tags, available")
+        .eq("cafe_id", cafe!.id).order("category").order("name");
+      if (error) throw error;
+      return data as MenuItem[];
+    },
+    enabled: !!cafe,
+  });
 
   const add = async () => {
     if (!cafe) return;
@@ -39,20 +42,20 @@ export default function OwnerMenu() {
       description: parsed.data.description || null, price: parsed.data.price, tags: [],
     }).select().single();
     if (error) { toast.error(error.message); return; }
-    setItems(p => [...p, data as MenuItem]);
     setDraft({ category: "", name: "", description: "", price: 0 });
+    queryClient.invalidateQueries({ queryKey: ["menu_items", cafe.id] });
     toast.success("Item added");
   };
 
   const remove = async (id: string) => {
     if (!confirm("Delete this item? Past orders keep their item names.")) return;
     await supabase.from("menu_items").delete().eq("id", id);
-    setItems(p => p.filter(i => i.id !== id));
+    queryClient.invalidateQueries({ queryKey: ["menu_items", cafe?.id] });
   };
 
   const toggle = async (id: string, available: boolean) => {
     await supabase.from("menu_items").update({ available }).eq("id", id);
-    setItems(p => p.map(i => i.id === id ? { ...i, available } : i));
+    queryClient.invalidateQueries({ queryKey: ["menu_items", cafe?.id] });
   };
 
   const openEdit = (item: MenuItem) => {
@@ -79,12 +82,12 @@ export default function OwnerMenu() {
     }).eq("id", editing.id).select().single();
     setEditSaving(false);
     if (error) { toast.error(error.message); return; }
-    setItems(p => p.map(i => i.id === editing.id ? (data as MenuItem) : i));
     setEditing(null);
+    queryClient.invalidateQueries({ queryKey: ["menu_items", cafe?.id] });
     toast.success("Item updated");
   };
 
-  if (cafeLoading || loading) return <OwnerLayout title="Menu"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin" /></div></OwnerLayout>;
+  if (cafeLoading || isLoading) return <OwnerLayout title="Menu"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin" /></div></OwnerLayout>;
 
   const cats = Array.from(new Set(items.map(i => i.category)));
 

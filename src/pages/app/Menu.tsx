@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,27 +14,32 @@ import { useCart } from "@/lib/cartContext";
 
 type MenuItem = { id: string; category: string; name: string; description: string | null; price: number; tags: string[] | null; available: boolean };
 
+const fetchMenuItems = async (cafeId: string): Promise<MenuItem[]> => {
+  const { data, error } = await supabase.from("menu_items")
+    .select("id, category, name, description, price, tags, available")
+    .eq("cafe_id", cafeId).order("category").order("name");
+  if (error) throw error;
+  return (data ?? []) as MenuItem[];
+};
+
 export default function CustomerMenu() {
   const cafe = useActiveCafe();
   const { user } = useAuth();
   const { cart, add, inc, dec, total } = useCart();
   const navigate = useNavigate();
-  const [items, setItems] = useState<MenuItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeCat, setActiveCat] = useState<string>("All");
 
-  useEffect(() => { if (!cafe) navigate("/discover"); }, [cafe, navigate]);
+  const { data: items = [], isLoading } = useQuery({
+    queryKey: ["menu_items", cafe?.id],
+    queryFn: () => fetchMenuItems(cafe!.id),
+    enabled: !!cafe,
+  });
 
-  useEffect(() => {
-    if (!cafe) return;
-    setLoading(true);
-    void supabase.from("menu_items")
-      .select("id, category, name, description, price, tags, available")
-      .eq("cafe_id", cafe.id).order("category").order("name")
-      .then(({ data }) => { setItems((data as MenuItem[]) ?? []); setLoading(false); })
-      .catch((err) => { console.error("Failed to load menu items:", err); setLoading(false); toast.error("Failed to load menu"); });
-  }, [cafe]);
+  if (!cafe) {
+    navigate("/discover");
+    return null;
+  }
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -54,7 +60,7 @@ export default function CustomerMenu() {
     add(item as any);
   };
 
-  if (loading) return <CustomerLayout title="Menu"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin" /></div></CustomerLayout>;
+  if (isLoading) return <CustomerLayout title="Menu"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin" /></div></CustomerLayout>;
 
   return (
     <CustomerLayout title="Menu" subtitle={cafe?.name}>

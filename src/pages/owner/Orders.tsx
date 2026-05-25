@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { OwnerLayout } from "@/components/OwnerLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 import { PaymentDialog } from "@/components/PaymentDialog";
 import { PayWithUpiButton } from "@/components/PayWithUpiButton";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 type OrderItem = { id: string; name: string; price: number; quantity: number };
 type Status = Database["public"]["Enums"]["order_status"];
@@ -55,23 +56,19 @@ const SELECT = "*, order_items(id, name, price, quantity)";
 
 export default function OwnerOrders() {
   const { cafe, loading: cafeLoading } = useOwnerCafe();
-  const [orders, setOrders] = useState<OrderRow[]>([]);
-  const [board, setBoard] = useState<Board | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<"live" | "completed" | "cancelled">("live");
-  const [counts, setCounts] = useState<Record<string, number>>({ live: 0, completed: 0, cancelled: 0 });
   const [payOrder, setPayOrder] = useState<OrderRow | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  const fetchAll = useCallback(async (quiet = false) => {
-    if (!cafe) return;
-    if (!quiet) setLoading(true);
-    try {
+  const { data: ordersData = { orders: [] as OrderRow[], board: null as Board | null }, isLoading } = useQuery({
+    queryKey: ["owner_orders", cafe?.id, tab],
+    queryFn: async () => {
+      if (!cafe) return { orders: [], board: null };
       if (tab === "live") {
         const { data, error } = await supabase.rpc("get_live_ops_board", { _cafe_id: cafe.id });
-        if (error) { toast.error(error.message); return; }
+        if (error) throw new Error(error.message);
         const b = data as Board;
-        setBoard(b);
         const { data: items } = await supabase.from("order_items").select("id, order_id, name, price, quantity").in("order_id", b.orders.map(o => o.id));
         const itemMap: Record<string, OrderItem[]> = {};
         (items ?? []).forEach(i => (itemMap[i.order_id] ||= []).push(i));
@@ -84,13 +81,13 @@ export default function OwnerOrders() {
           .filter(o => o.created_at >= todayStr)
           .map(o => ({ ...o, order_items: itemMap[o.id] || [] } as LiveOrder));
           
-        setOrders(filteredOrders);
+        return { orders: filteredOrders, board: b };
       } else {
         const { data, error } = await supabase.from("orders").select(SELECT)
           .eq("cafe_id", cafe.id)
           .in("status", TABS.find(t => t.key === tab)?.statuses || [])
           .order("created_at", { ascending: false }).limit(150);
-        if (error) { toast.error(error.message); return; }
+        if (error) throw new Error(error.message);
         
         const orderData = data as unknown as OrderRow[];
         const personIds = Array.from(new Set([
@@ -104,88 +101,105 @@ export default function OwnerOrders() {
           profiles?.forEach(p => personMap[p.user_id] = p.full_name || "Staff");
         }
 
-        setOrders((orderData ?? []).map(o => ({
-          ...o,
-          order_items: o.order_items ?? [],
-          collector_name: personMap[o.paid_collected_by] || null,
-          refunded_by_name: personMap[o.refunded_by] || null
-        })) as OrderRow[]);
+        return {
+          orders: (orderData ?? []).map(o => ({
+            ...o,
+            order_items: o.order_items ?? [],
+            collector_name: personMap[o.paid_collected_by] || null,
+            refunded_by_name: personMap[o.refunded_by] || null
+          })) as OrderRow[],
+          board: null,
+        };
       }
-    } finally {
-      if (!quiet) setLoading(false);
-    }
-  }, [cafe, tab]);
+    },
+    enabled: !!cafe,
+  });
 
-  const fetchCounts = useCallback(async () => {
-    if (!cafe) return;
-    const localToday = new Date();
-    localToday.setHours(0, 0, 0, 0);
-    const today = localToday.toISOString();
+  const { data: counts = { live: 0, completed: 0, cancelled: 0 } } = useQuery({
+    queryKey: ["owner_order_counts", cafe?.id],
+    queryFn: async () => {
+      if (!cafe) return { live: 0, completed: 0, cancelled: 0 };
+      const localToday = new Date();
+      localToday.setHours(0, 0, 0, 0);
+      const today = localToday.toISOString();
 
-    // Use more efficient count queries with filters
-    const [
-      { count: liveCount, error: liveError },
-      { count: completedCount, error: completedError },
-      { count: cancelledCount, error: cancelledError }
-    ] = await Promise.all([
-      supabase
-        .from("orders")
-        .select("*", { count: "exact", head: true })
-        .eq("cafe_id", cafe.id)
-        .in("status", ["placed", "accepted", "preparing", "ready", "served"])
-        .gte("created_at", today),
-      supabase
-        .from("orders")
-        .select("*", { count: "exact", head: true })
-        .eq("cafe_id", cafe.id)
-        .eq("status", "completed"),
-      supabase
-        .from("orders")
-        .select("*", { count: "exact", head: true })
-        .eq("cafe_id", cafe.id)
-        .eq("status", "cancelled"),
-    ]);
+      const [
+        { count: liveCount, error: liveError },
+        { count: completedCount, error: completedError },
+        { count: cancelledCount, error: cancelledError }
+      ] = await Promise.all([
+        supabase
+          .from("orders")
+          .select("*", { count: "exact", head: true })
+          .eq("cafe_id", cafe.id)
+          .in("status", ["placed", "accepted", "preparing", "ready", "served"])
+          .gte("created_at", today),
+        supabase
+          .from("orders")
+          .select("*", { count: "exact", head: true })
+          .eq("cafe_id", cafe.id)
+          .eq("status", "completed"),
+        supabase
+          .from("orders")
+          .select("*", { count: "exact", head: true })
+          .eq("cafe_id", cafe.id)
+          .eq("status", "cancelled"),
+      ]);
 
-    if (liveError || completedError || cancelledError) {
-      console.error("Error fetching counts:", { liveError, completedError, cancelledError });
-      return;
-    }
+      if (liveError || completedError || cancelledError) {
+        console.error("Error fetching counts:", { liveError, completedError, cancelledError });
+        return { live: 0, completed: 0, cancelled: 0 };
+      }
 
-    setCounts({
-      live: liveCount || 0,
-      completed: completedCount || 0,
-      cancelled: cancelledCount || 0,
-    });
-  }, [cafe]);
+      return {
+        live: liveCount || 0,
+        completed: completedCount || 0,
+        cancelled: cancelledCount || 0,
+      };
+    },
+    enabled: !!cafe,
+  });
+
+  const orders = ordersData.orders;
+  const board = ordersData.board;
 
   useEffect(() => {
     if (!cafe) return;
-    void fetchAll(); void fetchCounts();
-    const poll = setInterval(() => { void fetchAll(true); void fetchCounts(); }, 30000);
+    const poll = setInterval(() => {
+      void queryClient.invalidateQueries({ queryKey: ["owner_orders", cafe.id, tab] });
+      void queryClient.invalidateQueries({ queryKey: ["owner_order_counts", cafe.id] });
+    }, 30000);
     const ch = supabase.channel(`orders:${cafe.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `cafe_id=eq.${cafe.id}` }, () => {
-        void fetchAll(true); void fetchCounts();
+        void queryClient.invalidateQueries({ queryKey: ["owner_orders", cafe.id, tab] });
+        void queryClient.invalidateQueries({ queryKey: ["owner_order_counts", cafe.id] });
       })
       .subscribe();
     channelRef.current = ch;
     return () => { clearInterval(poll); if (channelRef.current) void supabase.removeChannel(channelRef.current); };
-  }, [cafe, tab, fetchAll, fetchCounts]);
+  }, [cafe, tab, queryClient]);
+
+  const invalidateAll = () => {
+    if (!cafe) return;
+    void queryClient.invalidateQueries({ queryKey: ["owner_orders", cafe.id, tab] });
+    void queryClient.invalidateQueries({ queryKey: ["owner_order_counts", cafe.id] });
+  };
 
   const updateStatus = async (id: string, status: Status) => {
     const { error } = await supabase.rpc("advance_order_workflow", { _order_id: id, _next_status: status });
     if (error) toast.error(error.message);
-    else void fetchAll(true);
+    else invalidateAll();
   };
   const cancelOrder = async (id: string) => {
     if (!confirm("Cancel this order?")) return;
     const { error } = await supabase.rpc("cancel_order_by_staff", { _order_id: id });
     if (error) toast.error(error.message);
-    else void fetchAll(true);
+    else invalidateAll();
   };
   const denyCancellation = async (id: string) => {
     const { error } = await supabase.rpc("deny_order_cancellation", { _order_id: id });
     if (error) toast.error(error.message);
-    else void fetchAll(true);
+    else invalidateAll();
   };
   const handleRefund = async (orderId: string, label: string) => {
     if (!window.confirm(`${label}?`)) return;
@@ -195,7 +209,7 @@ export default function OwnerOrders() {
       if (error) throw error;
       if (data && !(data as RpcResponse).success) throw new Error((data as RpcResponse).error || "Refund failed");
       toast.success("Refund processed successfully");
-      void fetchAll(true);
+      invalidateAll();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Refund failed");
     }
@@ -209,13 +223,13 @@ export default function OwnerOrders() {
       if (error) throw error;
       if (data && !(data as RpcResponse).success) throw new Error((data as RpcResponse).error || "Failed to reject refund");
       toast.success("Refund request rejected");
-      void fetchAll(true);
+      invalidateAll();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Rejection failed");
     }
   };
 
-  if (cafeLoading || loading) return <OwnerLayout title="Orders"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div></OwnerLayout>;
+  if (cafeLoading || isLoading) return <OwnerLayout title="Orders"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div></OwnerLayout>;
 
   return (
     <OwnerLayout title="Orders">
@@ -326,7 +340,7 @@ export default function OwnerOrders() {
                       variant="hero"
                       runnerMode={true}
                       label="Collect Payment"
-                      onPaid={() => { void fetchAll(true); }}
+                      onPaid={() => { invalidateAll(); }}
                     />
                   )}
                   {o.cancellation_requested && o.status !== 'cancelled' && (
@@ -361,7 +375,7 @@ export default function OwnerOrders() {
           customerName={payOrder.customer_name}
           customerPhone={payOrder.customer_phone}
           runnerMode={true}
-          onPaid={() => { void fetchAll(true); setPayOrder(null); }}
+          onPaid={() => { invalidateAll(); setPayOrder(null); }}
         />
       )}
     </OwnerLayout>

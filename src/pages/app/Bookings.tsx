@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,6 +6,7 @@ import { Loader2, Calendar, MapPin, Users, Clock, CalendarCheck, ShoppingBag } f
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 
 type Booking = {
   id: string;
@@ -23,31 +23,21 @@ type Booking = {
 export default function CustomerBookings() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-    const fetchBookings = async () => {
+  const { data: bookings = [], isLoading } = useQuery({
+    queryKey: ["bookings", user?.id],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from("bookings")
         .select("*, cafe:cafes(name, address)")
-        .eq("customer_user_id", user.id)
+        .eq("customer_user_id", user!.id)
         .order("booking_date", { ascending: false });
 
-      if (error) {
-        console.error("Error fetching bookings:", error);
-      } else {
-        setBookings(data as unknown as Booking[]);
-      }
-      setLoading(false);
-    };
-
-    fetchBookings();
-  }, [user]);
+      if (error) throw error;
+      return data as unknown as Booking[];
+    },
+    enabled: !!user,
+  });
 
   // Guest: show prompt to sign in
   if (!user) {
@@ -75,7 +65,7 @@ export default function CustomerBookings() {
 
   return (
     <CustomerLayout title="My Bookings" subtitle="Manage your table reservations">
-      {loading ? (
+      {isLoading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
         </div>

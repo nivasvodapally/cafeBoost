@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { Card } from "@/components/ui/card";
@@ -8,6 +7,7 @@ import { useActiveCafe } from "@/lib/cafeContext";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/lib/cartContext";
+import { useQuery } from "@tanstack/react-query";
 
 type Featured = { id: string; name: string; price: number; description: string | null; category: string };
 type RecentOrder = { id: string; total_amount: number; status: string; created_at: string };
@@ -17,37 +17,47 @@ export default function CustomerHome() {
   const { user, profile } = useAuth();
   const { cart, add, inc, dec } = useCart();
   const navigate = useNavigate();
-  const [m, setM] = useState<{ loyalty_points: number; total_visits: number } | null>(null);
-  const [featured, setFeatured] = useState<Featured[]>([]);
-  const [recent, setRecent] = useState<RecentOrder[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => { if (!cafe) navigate("/discover"); }, [cafe, navigate]);
+  const { data: m = null, isLoading: mLoading } = useQuery({
+    queryKey: ["loyalty_memberships", cafe?.id, user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("loyalty_memberships").select("loyalty_points, total_visits")
+        .eq("cafe_id", cafe!.id).eq("customer_user_id", user!.id).maybeSingle();
+      if (error) throw error;
+      return data as { loyalty_points: number; total_visits: number } | null;
+    },
+    enabled: !!cafe && !!user,
+  });
 
-  useEffect(() => {
-    if (!cafe) return;
-    let cancelled = false;
-    void (async () => {
-      const [memRes, itemsRes, ordersRes] = await Promise.all([
-        user ? supabase.from("loyalty_memberships").select("loyalty_points, total_visits")
-          .eq("cafe_id", cafe.id).eq("customer_user_id", user.id).maybeSingle() : Promise.resolve({ data: null }),
-        supabase.from("menu_items").select("id, name, price, description, category")
-          .eq("cafe_id", cafe.id).eq("available", true).limit(4),
-        user ? supabase.from("orders").select("id, total_amount, status, created_at")
-          .eq("customer_user_id", user.id).eq("cafe_id", cafe.id)
-          .order("created_at", { ascending: false }).limit(3) : Promise.resolve({ data: [] }),
-      ]);
-      if (cancelled) return;
-      setM((memRes as any)?.data ?? null);
-      setFeatured(((itemsRes.data as Featured[]) ?? []));
-      setRecent(((ordersRes as any)?.data as RecentOrder[]) ?? []);
-      setLoading(false);
-    })();
-    return () => { cancelled = true; };
-  }, [cafe, user]);
+  const { data: featured = [], isLoading: fLoading } = useQuery({
+    queryKey: ["menu_items", cafe?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("menu_items").select("id, name, price, description, category")
+        .eq("cafe_id", cafe!.id).eq("available", true).limit(4);
+      if (error) throw error;
+      return data as Featured[];
+    },
+    enabled: !!cafe,
+  });
 
-  if (!cafe) return null;
-  if (loading) return <CustomerLayout><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin" /></div></CustomerLayout>;
+  const { data: recent = [], isLoading: rLoading } = useQuery({
+    queryKey: ["orders", cafe?.id, user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("orders").select("id, total_amount, status, created_at")
+        .eq("customer_user_id", user!.id).eq("cafe_id", cafe!.id)
+        .order("created_at", { ascending: false }).limit(3);
+      if (error) throw error;
+      return data as RecentOrder[];
+    },
+    enabled: !!cafe && !!user,
+  });
+
+  if (!cafe) {
+    navigate("/discover");
+    return null;
+  }
+
+  if (mLoading || fLoading || rLoading) return <CustomerLayout><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin" /></div></CustomerLayout>;
 
   const firstName = profile?.full_name?.split(" ")[0];
 

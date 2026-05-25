@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { Card } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { useActiveCafe } from "@/lib/cafeContext";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 type Reward = { id: string; title: string; description: string | null; required_points: number };
 type Redemption = { id: string; reward_title: string; code: string; status: "pending" | "redeemed" | "cancelled"; points_spent: number; created_at: string; redeemed_at: string | null };
@@ -16,29 +17,43 @@ type Redemption = { id: string; reward_title: string; code: string; status: "pen
 export default function CustomerRewards() {
   const cafe = useActiveCafe();
   const { user } = useAuth();
-  const [rewards, setRewards] = useState<Reward[]>([]);
-  const [history, setHistory] = useState<Redemption[]>([]);
-  const [points, setPoints] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [confirmReward, setConfirmReward] = useState<Reward | null>(null);
   const [redeeming, setRedeeming] = useState(false);
   const [success, setSuccess] = useState<{ code: string; title: string } | null>(null);
 
-  const load = () => {
-    if (!cafe) return;
-    void Promise.all([
-      supabase.from("loyalty_rewards").select("id, title, description, required_points").eq("cafe_id", cafe.id).eq("active", true),
-      user ? supabase.from("loyalty_memberships").select("loyalty_points").eq("cafe_id", cafe.id).eq("customer_user_id", user.id).maybeSingle() : Promise.resolve({ data: null }),
-      user ? supabase.from("reward_redemptions").select("id, reward_title, code, status, points_spent, created_at, redeemed_at").eq("cafe_id", cafe.id).eq("customer_user_id", user.id).order("created_at", { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
-    ]).then(([r, m, h]) => {
-      setRewards((r.data as Reward[]) ?? []);
-      setPoints(m.data?.loyalty_points ?? 0);
-      setHistory((h.data as Redemption[]) ?? []);
-      setLoading(false);
-    }).catch((err) => { console.error("Failed to load rewards:", err); setLoading(false); toast.error("Failed to load rewards"); });
-  };
+  const { data: rewards = [], isLoading: rewardsLoading } = useQuery({
+    queryKey: ["rewards", cafe?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("loyalty_rewards").select("id, title, description, required_points").eq("cafe_id", cafe!.id).eq("active", true);
+      if (error) throw error;
+      return data as Reward[];
+    },
+    enabled: !!cafe,
+  });
 
-  useEffect(load, [cafe, user]);
+  const { data: points = 0, isLoading: pointsLoading } = useQuery({
+    queryKey: ["loyalty_membership", cafe?.id, user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("loyalty_memberships").select("loyalty_points").eq("cafe_id", cafe!.id).eq("customer_user_id", user!.id).maybeSingle();
+      if (error) throw error;
+      return data?.loyalty_points ?? 0;
+    },
+    enabled: !!cafe && !!user,
+  });
+
+  const { data: history = [], isLoading: historyLoading } = useQuery({
+    queryKey: ["reward_redemptions", cafe?.id, user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("reward_redemptions").select("id, reward_title, code, status, points_spent, created_at, redeemed_at").eq("cafe_id", cafe!.id).eq("customer_user_id", user!.id).order("created_at", { ascending: false }).limit(20);
+      if (error) throw error;
+      return data as Redemption[];
+    },
+    enabled: !!cafe && !!user,
+  });
+
+  const loading = rewardsLoading || pointsLoading || historyLoading;
 
   const onRedeem = async () => {
     if (!confirmReward) return;
@@ -52,7 +67,9 @@ export default function CustomerRewards() {
     const result = data as { id: string; code: string; points_spent: number };
     setSuccess({ code: result.code, title: confirmReward.title });
     setConfirmReward(null);
-    load();
+    queryClient.invalidateQueries({ queryKey: ["rewards", cafe?.id] });
+    queryClient.invalidateQueries({ queryKey: ["loyalty_membership", cafe?.id, user?.id] });
+    queryClient.invalidateQueries({ queryKey: ["reward_redemptions", cafe?.id, user?.id] });
   };
 
   if (loading) return <CustomerLayout title="Rewards"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin" /></div></CustomerLayout>;

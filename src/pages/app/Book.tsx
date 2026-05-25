@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { Card } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { createBooking, validateAgainstOpeningHours } from "@/services/bookingService";
 import { WaitlistService } from "@/services/waitlistService";
 import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 
 const TIMES = ["08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00"];
 
@@ -30,32 +31,33 @@ export default function CustomerBook() {
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
   const [bookingType, setBookingType] = useState<"confirmed" | "waitlist">("confirmed");
-  const [openingHours, setOpeningHours] = useState<Record<string, { open: string; close: string; closed?: boolean }> | null>(null);
-  const [slotInfo, setSlotInfo] = useState<{ remaining: number; capacity: number } | null>(null);
-  const [inlineError, setInlineError] = useState<string | null>(null);
 
-  // Load cafe opening hours once.
-  useEffect(() => {
-    if (!cafe) return;
-    void supabase.from("cafes").select("opening_hours").eq("id", cafe.id).maybeSingle()
-      .then(({ data }) => setOpeningHours((data?.opening_hours as typeof openingHours) ?? null))
-      .catch((err) => console.error("Failed to load opening hours:", err));
-  }, [cafe]);
+  const { data: openingHours = null } = useQuery({
+    queryKey: ["cafe_opening_hours", cafe?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("cafes").select("opening_hours").eq("id", cafe!.id).maybeSingle();
+      if (error) throw error;
+      return (data?.opening_hours as Record<string, { open: string; close: string; closed?: boolean }>) ?? null;
+    },
+    enabled: !!cafe,
+  });
 
-  // Live availability check on date/time change.
-  useEffect(() => {
-    if (!cafe || !date || !time) return;
-    const ohErr = validateAgainstOpeningHours(date, time, openingHours);
-    if (ohErr) { setInlineError(ohErr); setSlotInfo(null); return; }
-    setInlineError(null);
-    void supabase.rpc("check_slot_availability", { _cafe_id: cafe.id, _date: date, _time: time })
-      .then(({ data }) => {
-        if (!data) return;
-        const a = data as { remaining: number; capacity: number; taken: number };
-        setSlotInfo({ remaining: a.remaining, capacity: a.capacity });
-      })
-      .catch((err) => console.error("Failed to check slot availability:", err));
-  }, [cafe, date, time, openingHours]);
+  const ohErr = openingHours ? validateAgainstOpeningHours(date, time, openingHours) : null;
+
+  const { data: slotAvail = null } = useQuery({
+    queryKey: ["slot_availability", cafe?.id, date, time],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("check_slot_availability", { _cafe_id: cafe!.id, _date: date, _time: time });
+      if (error) throw error;
+      if (!data) return null;
+      const a = data as { remaining: number; capacity: number; taken: number };
+      return { remaining: a.remaining, capacity: a.capacity };
+    },
+    enabled: !!cafe && !!date && !!time && !ohErr,
+  });
+
+  const inlineError = ohErr;
+  const slotInfo = ohErr ? null : slotAvail;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { CustomerLayout } from "@/components/CustomerLayout";
 import { Card } from "@/components/ui/card";
@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { setActiveCafe } from "@/lib/cafeContext";
 import { PaymentDialog } from "@/components/PaymentDialog";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Database } from "@/integrations/supabase/types";
 
 type OrderRow = Database["public"]["Tables"]["orders"]["Row"];
@@ -114,39 +115,38 @@ function LiveETABox({ orderId, etaMinutes, updatedAt }: { orderId: string; etaMi
 export default function CustomerOrders() {
   const { user } = useAuth();
   const { add } = useCart();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [items, setItems] = useState<Record<string, OrderItem[]>>({});
-  const [loading, setLoading] = useState(true);
   const [paymentOrder, setPaymentOrder] = useState<Order | null>(null);
   const [cancelDialog, setCancelDialog] = useState<{ open: boolean; orderId: string | null }>({ open: false, orderId: null });
   const [refundDialog, setRefundDialog] = useState<{ open: boolean; orderId: string | null }>({ open: false, orderId: null });
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const fetchAll = useCallback(async () => {
-    if (!user) return;
-    const { data } = await supabase.from("orders")
-      .select("*, cafe:cafes(name), order_items(*)")
-      .eq("customer_user_id", user.id)
-      .order("created_at", { ascending: false }).limit(50);
-    if (data) {
-      setOrders(data as unknown as Order[]);
-      const map: Record<string, OrderItem[]> = {};
-      (data as unknown as Order[]).forEach((o) => map[o.id] = (o as any).order_items || []);
-      setItems(map);
-    }
-    setLoading(false);
-  }, [user]);
+  const { data: orders = [], isLoading } = useQuery({
+    queryKey: ["customer_orders", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase.from("orders")
+        .select("*, cafe:cafes(name), order_items(*)")
+        .eq("customer_user_id", user.id)
+        .order("created_at", { ascending: false }).limit(50);
+      if (error) throw error;
+      return data as unknown as Order[];
+    },
+    enabled: !!user,
+  });
+
+  const items: Record<string, OrderItem[]> = {};
+  orders.forEach((o) => items[o.id] = (o as any).order_items || []);
 
   useEffect(() => {
-    if (!user) { setLoading(false); return; }
-    void fetchAll();
+    if (!user) return;
     const sub = supabase.channel(`customer_orders:${user.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `customer_user_id=eq.${user.id}` }, () => {
-        void fetchAll();
+        void queryClient.invalidateQueries({ queryKey: ["customer_orders", user.id] });
       })
       .subscribe();
     return () => { void supabase.removeChannel(sub); };
-  }, [user, fetchAll]);
+  }, [user, queryClient]);
 
   const cancelByCustomer = async (id: string) => {
     setCancelDialog({ open: true, orderId: id });
@@ -158,6 +158,7 @@ export default function CustomerOrders() {
     if (error) toast.error(error.message);
     else toast.success("Request sent");
     setCancelDialog({ open: false, orderId: null });
+    if (user) queryClient.invalidateQueries({ queryKey: ["customer_orders", user.id] });
   };
 
   const requestRefund = async (id: string) => {
@@ -173,6 +174,7 @@ export default function CustomerOrders() {
       toast.error((data as RefundResponse).error || "Unknown error");
     } else toast.success("Refund request sent");
     setRefundDialog({ open: false, orderId: null });
+    if (user) queryClient.invalidateQueries({ queryKey: ["customer_orders", user.id] });
   };
 
   const handleReorder = async (o: Order) => {
@@ -213,7 +215,7 @@ export default function CustomerOrders() {
     }
   };
 
-  if (loading) return <CustomerLayout title="My Orders"><div className="grid place-items-center h-64"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div></CustomerLayout>;
+  if (isLoading) return <CustomerLayout title="My Orders"><div className="grid place-items-center h-64"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div></CustomerLayout>;
 
   // Guest: show prompt to sign in (check before loading to avoid infinite loading state)
   if (!user) {
@@ -376,7 +378,7 @@ export default function CustomerOrders() {
           amount={paymentOrder.total_amount}
           customerName={paymentOrder.customer_name}
           customerPhone={paymentOrder.customer_phone}
-          onPaid={() => { setPaymentOrder(null); void fetchAll(); }}
+          onPaid={() => { setPaymentOrder(null); if (user) queryClient.invalidateQueries({ queryKey: ["customer_orders", user.id] }); }}
         />
       )}
 

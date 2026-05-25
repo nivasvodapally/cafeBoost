@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Loader2, Printer, ArrowLeft, CheckCircle2, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 
 type Order = {
   id: string; created_at: string; paid_at: string | null;
@@ -19,29 +20,33 @@ type Cafe = { name: string; address: string | null; city: string | null; phone: 
 
 export default function CustomerInvoice() {
   const { id } = useParams();
-  const [order, setOrder] = useState<Order | null>(null);
-  const [items, setItems] = useState<Item[]>([]);
-  const [cafe, setCafe] = useState<Cafe | null>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => { document.title = "Invoice — CafeBoost"; }, []);
-  useEffect(() => {
-    if (!id) return;
-    void (async () => {
+
+  const { data: invoiceData, isLoading } = useQuery({
+    queryKey: ["invoice", id],
+    queryFn: async () => {
+      if (!id) return null;
       const { data: o } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
-      if (!o) { setLoading(false); return; }
-      setOrder(o);
+      if (!o) return null;
       const [{ data: oi }, { data: c }] = await Promise.all([
         supabase.from("order_items").select("id, name, price, quantity").eq("order_id", id),
         supabase.from("cafes").select("name, address, city, phone, email, currency, tax_rate, gstin").eq("id", o.cafe_id).maybeSingle(),
       ]);
-      setItems((oi as Item[]) ?? []);
-      setCafe((c as Cafe) ?? null);
-      setLoading(false);
-    })();
-  }, [id]);
+      return {
+        order: o as Order,
+        items: (oi as Item[]) ?? [],
+        cafe: (c as Cafe) ?? null,
+      };
+    },
+    enabled: !!id,
+  });
 
-  if (loading) return <div className="min-h-screen grid place-items-center"><Loader2 className="w-6 h-6 animate-spin" /></div>;
+  const order = invoiceData?.order ?? null;
+  const items = invoiceData?.items ?? [];
+  const cafe = invoiceData?.cafe ?? null;
+
+  if (isLoading) return <div className="min-h-screen grid place-items-center"><Loader2 className="w-6 h-6 animate-spin" /></div>;
   if (!order) return <div className="min-h-screen grid place-items-center text-muted-foreground">Invoice not found.</div>;
 
   if (order.payment_status !== "paid") {
