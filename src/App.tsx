@@ -4,6 +4,7 @@ import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ThemeProvider } from "next-themes";
 import { RequireRole } from "@/components/RequireRole";
 import { RequireStaff } from "@/components/RequireStaff";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -86,10 +87,11 @@ const CustomerAppRoutes = () => (
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner position="top-right" richColors closeButton />
-      <HashRouter>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner position="top-right" richColors closeButton />
+        <HashRouter>
         <AuthProvider>
           <GuestSessionGuard />
           <ErrorBoundary>
@@ -141,6 +143,7 @@ const App = () => (
         </AuthProvider>
       </HashRouter>
     </TooltipProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 

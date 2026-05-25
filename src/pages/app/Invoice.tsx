@@ -61,6 +61,74 @@ export default function CustomerInvoice() {
     );
   }
 
+  /* ── Print styles injected inline for a crisp, clean print layout ── */
+  const printStyles = `
+@media print {
+  @page { margin: 12mm 10mm; }
+  html, body {
+    background: #fff !important;
+    color: #000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  /* Hide everything outside the invoice card */
+  body > *:not(#invoice-print-area),
+  nav, header, footer, .sidebar,
+  button:not(#print-trigger), .btn, a[class*="Button"] {
+    display: none !important;
+  }
+  #invoice-print-area {
+    display: block !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  #invoice-card {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #fff !important;
+  }
+  /* Typography — ensure black text on white, keep print-friendly colours */
+  #invoice-card * {
+    color: #000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  /* Keep background colours for badges and accent elements */
+  #invoice-card [class*="bg-success"],
+  #invoice-card [class*="bg-accent-soft"] {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  /* Table borders */
+  #invoice-card table th,
+  #invoice-card table td,
+  #invoice-card [class*="border"] {
+    border-color: #ccc !important;
+  }
+  /* Page-break safety */
+  #invoice-card table,
+  #invoice-card tbody tr,
+  #invoice-card footer {
+    page-break-inside: avoid;
+  }
+  /* Links — no underline decoration on print */
+  #invoice-card a {
+    text-decoration: none !important;
+  }
+}
+`;
+
   const currency = cafe?.currency ?? "INR";
   const fmt = (n: number) => new Intl.NumberFormat(undefined, { style: "currency", currency }).format(Number(n) || 0);
   const isPaid = order.payment_status === "paid";
@@ -74,14 +142,16 @@ export default function CustomerInvoice() {
     : computedTotal;               // DB value is wrong, use computed
 
   return (
-    <div className="min-h-screen bg-muted/30 py-8 print:bg-white print:py-0">
+    <>
+      <style>{printStyles}</style>
+      <div className="min-h-screen bg-muted/30 py-8 print:bg-white print:py-0" id="invoice-print-area">
       <div className="max-w-2xl mx-auto px-4">
         <div className="flex items-center justify-between mb-4 print:hidden">
           <Link to="/app/orders"><Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4 mr-1" /> Back to orders</Button></Link>
           <Button variant="hero" size="sm" onClick={() => window.print()}><Printer className="w-4 h-4 mr-2" /> Print invoice</Button>
         </div>
 
-        <Card className="p-8 print:shadow-none print:border-0">
+        <Card className="p-8 print:shadow-none print:border-0" id="invoice-card">
           <header className="flex items-start justify-between gap-4 pb-6 border-b border-border">
             <div>
               <h1 className="font-display text-2xl font-bold">{cafe?.name ?? "Cafe"}</h1>
@@ -208,5 +278,6 @@ export default function CustomerInvoice() {
         </Card>
       </div>
     </div>
+  </>
   );
 }

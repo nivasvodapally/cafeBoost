@@ -2,6 +2,7 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 import { BarChart3, ClipboardList, History, LogOut, Menu, Store, Timer, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Logo } from "./Logo";
+import { ThemeToggle } from "./ThemeToggle";
 import { Button } from "./ui/button";
 import { signOut, useAuth } from "@/hooks/useAuth";
 import { useStaffCafe } from "@/hooks/useStaffCafe";
@@ -60,6 +61,7 @@ export function StaffLayout({ children, title, subtitle, action }: { children: R
               <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground truncate">{title}</h1>
               {subtitle && <p className="text-sm text-muted-foreground mt-0.5 truncate">{subtitle}</p>}
             </div>
+            <ThemeToggle />
             {action}
           </div>
         </header>

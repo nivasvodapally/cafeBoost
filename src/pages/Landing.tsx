@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Logo } from "@/components/Logo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   ArrowRight, Check, Coffee, Gift, CalendarCheck, Users, QrCode, BarChart3, Star, Sparkles,
 } from "lucide-react";
@@ -57,6 +58,7 @@ export default function Landing() {
             <a href="#testimonials" className="hover:text-foreground transition-smooth">Customers</a>
           </nav>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <Link to="/for-cafes/auth"><Button variant="ghost" size="sm">Sign in</Button></Link>
             <Link to="/for-cafes/auth"><Button variant="hero" size="sm">Start Free</Button></Link>
           </div>

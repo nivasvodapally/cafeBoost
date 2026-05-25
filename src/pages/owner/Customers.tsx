@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { OwnerLayout } from "@/components/OwnerLayout";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Loader2, Search, Users } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Search, Users } from "lucide-react";
 import { useOwnerCafe } from "@/hooks/useOwnerCafe";
 import { fetchCafeCustomers, type CustomerRow } from "@/services/customerService";
 
@@ -39,7 +40,20 @@ export default function OwnerCustomers() {
       || (r.phone ?? "").toLowerCase().includes(needle));
   }, [rows, q]);
 
-  if (cafeLoading || loading) return <OwnerLayout title="Customers"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div></OwnerLayout>;
+  if (cafeLoading || loading) return (
+    <OwnerLayout title="Customers">
+      <div className="space-y-4">
+        {/* Search skeleton */}
+        <Skeleton className="h-10 w-full max-w-sm rounded-lg" />
+        {/* Table header skeleton */}
+        <Skeleton className="h-10 w-full rounded-lg" />
+        {/* Table rows skeleton */}
+        {[...Array(5)].map((_, i) => (
+          <Skeleton key={i} className="h-14 w-full rounded-lg" />
+        ))}
+      </div>
+    </OwnerLayout>
+  );
 
   return (
     <OwnerLayout title="Customers" subtitle={`${rows.length} total`}>

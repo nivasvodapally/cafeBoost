@@ -2,6 +2,7 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 import { Home, UtensilsCrossed, CalendarCheck, Gift, ClipboardList, User, LogOut, Coffee, ChevronDown, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Logo } from "./Logo";
+import { ThemeToggle } from "./ThemeToggle";
 import { Button } from "./ui/button";
 import { signOut, useAuth } from "@/hooks/useAuth";
 import { useActiveCafe, setActiveCafe } from "@/lib/cafeContext";
@@ -46,6 +47,7 @@ export function CustomerLayout({
             </span>
           )}
           <div className="ml-auto flex items-center gap-2">
+            <ThemeToggle />
             {user ? (
               <>
                 <span className="text-sm text-muted-foreground hidden sm:inline">

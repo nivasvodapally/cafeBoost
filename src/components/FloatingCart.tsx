@@ -34,9 +34,15 @@ export function FloatingCart() {
 
   // Track last cleared order to handle transition
   const [justPlacedOrder, setJustPlacedOrder] = useState<{ id: string; total: number } | null>(null);
+  const justPlacedOrderRef = useRef(justPlacedOrder);
 
   const [activeOrder, setActiveOrder] = useState<OrderRow | null>(null);
   const [orderItems, setOrderItems] = useState<{ name: string; qty: number }[]>([]);
+
+  // Sync ref with latest justPlacedOrder value
+  useEffect(() => {
+    justPlacedOrderRef.current = justPlacedOrder;
+  }, [justPlacedOrder]);
 
   // Expose showCart method for external triggers (like reorder)
   useEffect(() => {
@@ -64,9 +70,9 @@ export function FloatingCart() {
     prevCount.current = count;
   }, [count]);
 
-  // Subscribe to active orders (skip if we just placed an order)
+  // Initial fetch of active order (runs once when user/cafe changes)
   useEffect(() => {
-    if (!user || !cafe || justPlacedOrder) return;
+    if (!user || !cafe || justPlacedOrderRef.current) return;
 
     const fetchActiveOrder = async () => {
       const { data } = await supabase
@@ -89,6 +95,11 @@ export function FloatingCart() {
     };
 
     void fetchActiveOrder();
+  }, [user, cafe]);
+
+  // Subscribe to active order updates (skip if we just placed an order)
+  useEffect(() => {
+    if (!user || !cafe || justPlacedOrderRef.current) return;
 
     const sub = supabase.channel(`fc_order_${user.id}_${cafe.id}`)
       .on("postgres_changes", {
@@ -99,7 +110,7 @@ export function FloatingCart() {
         if (o.cafe_id !== cafe.id) return;
 
         // If payment marked as paid, clear the justPlacedOrder so it doesn't block future subscriptions
-        if (justPlacedOrder && o.payment_status === 'paid' && o.id === justPlacedOrder.id) {
+        if (justPlacedOrderRef.current && o.payment_status === 'paid' && o.id === justPlacedOrderRef.current.id) {
           setJustPlacedOrder(null);
         }
 
@@ -116,7 +127,7 @@ export function FloatingCart() {
       .subscribe();
 
     return () => { void supabase.removeChannel(sub); };
-  }, [user, cafe, count, expanded]);
+  }, [user, cafe, expanded]);
 
   const hasCart = count > 0;
   const hasActiveOrder = !!activeOrder;

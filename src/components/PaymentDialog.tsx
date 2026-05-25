@@ -142,14 +142,7 @@ export function PaymentDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => {
-      // Prevent closing if we are in the initial selection phase (force choice)
-      if (!v && !paid && !cashToken && !waitingUpi && !runnerMode) {
-        toast.info("Please select a payment method to proceed.");
-        return;
-      }
-      onOpenChange(v);
-    }}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

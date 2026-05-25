@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { OwnerLayout } from "@/components/OwnerLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, CalendarCheck, Phone, X } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { CalendarCheck, Phone, X } from "lucide-react";
 import { useOwnerCafe } from "@/hooks/useOwnerCafe";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -64,7 +65,35 @@ export default function OwnerBookings() {
     else setBookings(prev => prev.map(b => b.id === id ? { ...b, status, ...extra } : b));
   };
 
-  if (cafeLoading || loading) return <OwnerLayout title="Bookings"><div className="grid place-items-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div></OwnerLayout>;
+  if (cafeLoading || loading) return (
+    <OwnerLayout title="Bookings">
+      <div className="space-y-4">
+        {/* Tabs skeleton */}
+        <div className="flex gap-2 mb-5">
+          {[...Array(3)].map((_, i) => (
+            <Skeleton key={i} className="h-10 w-28 rounded-lg" />
+          ))}
+        </div>
+        {/* Booking card skeletons */}
+        {[...Array(4)].map((_, i) => (
+          <Card key={i} className="p-4">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-5 w-48" />
+                <Skeleton className="h-4 w-64" />
+                <Skeleton className="h-4 w-36" />
+              </div>
+              <Skeleton className="h-6 w-24 rounded-full" />
+            </div>
+            <div className="mt-3 flex gap-2 justify-end">
+              <Skeleton className="h-8 w-20 rounded-md" />
+              <Skeleton className="h-8 w-20 rounded-md" />
+            </div>
+          </Card>
+        ))}
+      </div>
+    </OwnerLayout>
+  );
 
   const today = new Date().toISOString().slice(0, 10);
   const visible = bookings.filter(b => {

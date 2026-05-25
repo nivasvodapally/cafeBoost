@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Logo } from "./Logo";
+import { ThemeToggle } from "./ThemeToggle";
 import { Button } from "./ui/button";
 import { signOut, useAuth } from "@/hooks/useAuth";
 import { useOwnerCafe } from "@/hooks/useOwnerCafe";
@@ -120,6 +121,7 @@ export function OwnerLayout({
               {subtitle && <p className="text-sm text-muted-foreground mt-0.5 truncate">{subtitle}</p>}
             </div>
             <NotificationsBell />
+            <ThemeToggle />
             {action}
           </div>
         </header>
