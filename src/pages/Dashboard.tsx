@@ -211,7 +211,8 @@ export default function Dashboard() {
       .select("*", { count: "exact", head: true })
       .eq("cafe_id", cafe.id)
       .not("status", "in", "('completed','cancelled')")
-      .then(({ count }) => setPendingCount(count ?? 0));
+      .then(({ count }) => setPendingCount(count ?? 0))
+      .catch((err) => console.error("Failed to load pending orders count:", err));
   }, [cafe]);
 
   const chartData = series.map((s) => ({ ...s, label: format(new Date(s.date), range === "7d" ? "EEE" : "MMM d") }));

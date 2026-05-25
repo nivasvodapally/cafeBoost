@@ -31,7 +31,7 @@ export default function ResetPassword() {
     });
     void supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setReady(true);
-    });
+    }).catch((err) => console.error("Failed to get session:", err));
     return () => stop?.unsubscribe();
   }, []);
 

@@ -38,7 +38,8 @@ export default function OwnerBookings() {
     setLoading(true);
     void supabase.from("bookings").select("*").eq("cafe_id", cafe.id)
       .order("booking_date", { ascending: false }).order("booking_time", { ascending: false }).limit(200)
-      .then(({ data }) => { if (!cancelled) { setBookings((data as Booking[]) ?? []); setLoading(false); } });
+      .then(({ data }) => { if (!cancelled) { setBookings((data as Booking[]) ?? []); setLoading(false); } })
+      .catch((err) => { console.error("Failed to load bookings:", err); if (!cancelled) setLoading(false); toast.error("Failed to load bookings"); });
 
     if (channelRef.current) { void supabase.removeChannel(channelRef.current); channelRef.current = null; }
     const ch = supabase

@@ -85,7 +85,8 @@ export default function OwnerSettings() {
       .order("paired_at", { ascending: false })
       .then(({ data }: { data: KdsDevice[] | null }) => {
         if (!cancel) setDevices(data ?? []);
-      });
+      })
+      .catch((err) => { console.error("Failed to load KDS devices:", err); });
     return () => { cancel = true; };
   }, [cafe, savingPin, genCodeBusy]);
 

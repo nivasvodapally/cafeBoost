@@ -40,43 +40,51 @@ export default function OwnerLoyalty() {
   const [pointsAdjustment, setPointsAdjustment] = useState<Record<string, number>>({});
 
   const loadRedemptions = useCallback(async (cafeId: string) => {
-    const { data: rows } = await supabase
-      .from("reward_redemptions")
-      .select("id, reward_title, points_spent, code, customer_user_id, created_at, status")
-      .eq("cafe_id", cafeId)
-      .order("created_at", { ascending: false })
-      .limit(50);
-    const list = (rows as Redemption[]) ?? [];
-    if (list.length) {
-      const ids = Array.from(new Set(list.map(r => r.customer_user_id)));
-      const { data: profiles } = await supabase.from("profiles")
-        .select("user_id, full_name").in("user_id", ids);
-      const nameMap = new Map((profiles ?? []).map(p => [p.user_id, p.full_name]));
-      list.forEach(r => { r.customer_name = nameMap.get(r.customer_user_id) ?? "Guest"; });
+    try {
+      const { data: rows } = await supabase
+        .from("reward_redemptions")
+        .select("id, reward_title, points_spent, code, customer_user_id, created_at, status")
+        .eq("cafe_id", cafeId)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      const list = (rows as Redemption[]) ?? [];
+      if (list.length) {
+        const ids = Array.from(new Set(list.map(r => r.customer_user_id)));
+        const { data: profiles } = await supabase.from("profiles")
+          .select("user_id, full_name").in("user_id", ids);
+        const nameMap = new Map((profiles ?? []).map(p => [p.user_id, p.full_name]));
+        list.forEach(r => { r.customer_name = nameMap.get(r.customer_user_id) ?? "Guest"; });
+      }
+      setRedemptions(list);
+    } catch (err) {
+      console.error("Failed to load redemptions:", err);
     }
-    setRedemptions(list);
   }, []);
 
   const loadMembers = useCallback(async (cafeId: string) => {
-    const { data: membersData } = await supabase
-      .from("loyalty_memberships")
-      .select("id, customer_user_id, loyalty_points, total_visits, last_visit_at, created_at")
-      .eq("cafe_id", cafeId)
-      .order("loyalty_points", { ascending: false });
-    
-    const list = (membersData as LoyaltyMember[]) ?? [];
-    if (list.length) {
-      const ids = Array.from(new Set(list.map(m => m.customer_user_id)));
-      const { data: profiles } = await supabase.from("profiles")
-        .select("user_id, full_name, email").in("user_id", ids);
-      const profileMap = new Map((profiles ?? []).map(p => [p.user_id, { name: p.full_name, email: p.email }]));
-      list.forEach(m => {
-        const profile = profileMap.get(m.customer_user_id);
-        m.customer_name = profile?.name || "Guest";
-        m.customer_email = profile?.email || null;
-      });
+    try {
+      const { data: membersData } = await supabase
+        .from("loyalty_memberships")
+        .select("id, customer_user_id, loyalty_points, total_visits, last_visit_at, created_at")
+        .eq("cafe_id", cafeId)
+        .order("loyalty_points", { ascending: false });
+      
+      const list = (membersData as LoyaltyMember[]) ?? [];
+      if (list.length) {
+        const ids = Array.from(new Set(list.map(m => m.customer_user_id)));
+        const { data: profiles } = await supabase.from("profiles")
+          .select("user_id, full_name, email").in("user_id", ids);
+        const profileMap = new Map((profiles ?? []).map(p => [p.user_id, { name: p.full_name, email: p.email }]));
+        list.forEach(m => {
+          const profile = profileMap.get(m.customer_user_id);
+          m.customer_name = profile?.name || "Guest";
+          m.customer_email = profile?.email || null;
+        });
+      }
+      setMembers(list);
+    } catch (err) {
+      console.error("Failed to load loyalty members:", err);
     }
-    setMembers(list);
   }, []);
 
   useEffect(() => {
@@ -85,7 +93,8 @@ export default function OwnerLoyalty() {
       supabase.from("loyalty_rewards").select("id, title, description, required_points, active").eq("cafe_id", cafe.id),
       loadRedemptions(cafe.id),
       loadMembers(cafe.id),
-    ]).then(([r]) => { setRewards((r.data as Reward[]) ?? []); setLoading(false); });
+    ]).then(([r]) => { setRewards((r.data as Reward[]) ?? []); setLoading(false); })
+      .catch((err) => { console.error("Failed to load loyalty data:", err); setLoading(false); toast.error("Failed to load loyalty data"); });
   }, [cafe, loadRedemptions, loadMembers]);
 
   const add = async () => {

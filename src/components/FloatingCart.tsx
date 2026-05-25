@@ -75,22 +75,26 @@ export function FloatingCart() {
     if (!user || !cafe || justPlacedOrderRef.current) return;
 
     const fetchActiveOrder = async () => {
-      const { data } = await supabase
-        .from("orders")
-        .select("*, order_items(name, quantity)")
-        .eq("customer_user_id", user.id)
-        .eq("cafe_id", cafe.id)
-        .not("status", "in", "(served,completed,cancelled)")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      try {
+        const { data } = await supabase
+          .from("orders")
+          .select("*, order_items(name, quantity)")
+          .eq("customer_user_id", user.id)
+          .eq("cafe_id", cafe.id)
+          .not("status", "in", "(served,completed,cancelled)")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-      if (data) {
-        setActiveOrder(data as OrderRow);
-        setOrderItems((data as any).order_items?.map((i: { name: string; quantity: number }) => ({ name: i.name, qty: i.quantity })) ?? []);
-      } else if (count === 0) {
-        setActiveOrder(null);
-        setOrderItems([]);
+        if (data) {
+          setActiveOrder(data as OrderRow);
+          setOrderItems((data as any).order_items?.map((i: { name: string; quantity: number }) => ({ name: i.name, qty: i.quantity })) ?? []);
+        } else if (count === 0) {
+          setActiveOrder(null);
+          setOrderItems([]);
+        }
+      } catch (err) {
+        console.error("Failed to fetch active order:", err);
       }
     };
 
@@ -119,9 +123,13 @@ export function FloatingCart() {
           setOrderItems([]);
           if (expanded) setExpanded(false);
         } else {
-          const { data } = await supabase.from("order_items").select("name, quantity").eq("order_id", o.id);
-          setActiveOrder(o);
-          setOrderItems(data?.map(i => ({ name: i.name, qty: i.quantity })) ?? []);
+          try {
+            const { data } = await supabase.from("order_items").select("name, quantity").eq("order_id", o.id);
+            setActiveOrder(o);
+            setOrderItems(data?.map(i => ({ name: i.name, qty: i.quantity })) ?? []);
+          } catch (err) {
+            console.error("Failed to load order items from subscription:", err);
+          }
         }
       })
       .subscribe();

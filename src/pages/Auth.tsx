@@ -52,7 +52,7 @@ export default function Auth() {
         if (stashed) { dest = stashed; sessionStorage.removeItem("cafeboost:postAuthReturnTo"); }
       } catch { /* ignore */ }
       navigate(hasOwner ? "/dashboard" : dest, { replace: true });
-    });
+    }).catch((err) => console.error("Failed to get auth session:", err));
     return () => { cancel = true; };
   }, [navigate, returnTo]);
 

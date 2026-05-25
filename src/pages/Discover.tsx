@@ -24,7 +24,8 @@ export default function Discover() {
     document.title = "Discover Cafes — CafeBoost";
     void supabase.from("cafes").select("id, slug, name, city, description")
       .eq("onboarding_completed", true).order("name")
-      .then(({ data }) => { setCafes((data as Cafe[]) ?? []); setLoading(false); });
+      .then(({ data }) => { setCafes((data as Cafe[]) ?? []); setLoading(false); })
+      .catch((err) => { console.error("Failed to load cafes:", err); setLoading(false); });
   }, []);
 
   const pick = (c: Cafe) => {

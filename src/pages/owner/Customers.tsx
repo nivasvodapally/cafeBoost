@@ -28,7 +28,8 @@ export default function OwnerCustomers() {
     if (!cafe) return;
     let cancelled = false;
     setLoading(true);
-    void fetchCafeCustomers(cafe.id).then((r) => { if (!cancelled) { setRows(r); setLoading(false); } });
+    void fetchCafeCustomers(cafe.id).then((r) => { if (!cancelled) { setRows(r); setLoading(false); } })
+      .catch((err) => { console.error("Failed to load customers:", err); if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [cafe]);
 

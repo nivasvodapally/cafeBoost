@@ -38,7 +38,8 @@ export default function CustomerBook() {
   useEffect(() => {
     if (!cafe) return;
     void supabase.from("cafes").select("opening_hours").eq("id", cafe.id).maybeSingle()
-      .then(({ data }) => setOpeningHours((data?.opening_hours as typeof openingHours) ?? null));
+      .then(({ data }) => setOpeningHours((data?.opening_hours as typeof openingHours) ?? null))
+      .catch((err) => console.error("Failed to load opening hours:", err));
   }, [cafe]);
 
   // Live availability check on date/time change.
@@ -52,7 +53,8 @@ export default function CustomerBook() {
         if (!data) return;
         const a = data as { remaining: number; capacity: number; taken: number };
         setSlotInfo({ remaining: a.remaining, capacity: a.capacity });
-      });
+      })
+      .catch((err) => console.error("Failed to check slot availability:", err));
   }, [cafe, date, time, openingHours]);
 
   const submit = async (e: React.FormEvent) => {

@@ -44,7 +44,8 @@ export function PaymentDialog({
   useEffect(() => {
     if (!open) return;
     setPaid(false); setWaitingUpi(false);
-    void getCafePaymentMode(cafeId).then(setMode);
+    void getCafePaymentMode(cafeId).then(setMode)
+      .catch((err) => console.error("Failed to load payment mode:", err));
   }, [open, cafeId]);
 
   // Poll payment status while we're waiting for an external capture/simulation.
@@ -52,13 +53,17 @@ export function PaymentDialog({
     if (!open || !waitingUpi) return;
     let stop = false;
     const tick = async () => {
-      const { data } = await supabase.from("orders").select("payment_status").eq("id", orderId).maybeSingle();
-      if (stop) return;
-      if (data?.payment_status === "paid") {
-        setPaid(true); setWaitingUpi(false);
-        toast.success("Payment received");
-        onPaid?.();
-        setTimeout(() => onOpenChange(false), 900);
+      try {
+        const { data } = await supabase.from("orders").select("payment_status").eq("id", orderId).maybeSingle();
+        if (stop) return;
+        if (data?.payment_status === "paid") {
+          setPaid(true); setWaitingUpi(false);
+          toast.success("Payment received");
+          onPaid?.();
+          setTimeout(() => onOpenChange(false), 900);
+        }
+      } catch (err) {
+        console.error("Failed to poll payment status:", err);
       }
     };
     const i = setInterval(() => void tick(), 2500);

@@ -32,7 +32,8 @@ export default function OwnerSetup() {
   useEffect(() => {
     if (loading || !user) return;
     void supabase.from("cafes").select("id, onboarding_completed").eq("owner_user_id", user.id).maybeSingle()
-      .then(({ data }) => { if (data?.onboarding_completed) navigate("/dashboard", { replace: true }); });
+      .then(({ data }) => { if (data?.onboarding_completed) navigate("/dashboard", { replace: true }); })
+      .catch((err) => console.error("Failed to check onboarding status:", err));
   }, [user, loading, navigate]);
 
   const onSubmit = async (e: React.FormEvent) => {

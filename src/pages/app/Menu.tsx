@@ -31,7 +31,8 @@ export default function CustomerMenu() {
     void supabase.from("menu_items")
       .select("id, category, name, description, price, tags, available")
       .eq("cafe_id", cafe.id).order("category").order("name")
-      .then(({ data }) => { setItems((data as MenuItem[]) ?? []); setLoading(false); });
+      .then(({ data }) => { setItems((data as MenuItem[]) ?? []); setLoading(false); })
+      .catch((err) => { console.error("Failed to load menu items:", err); setLoading(false); toast.error("Failed to load menu"); });
   }, [cafe]);
 
   const filtered = useMemo(() => {

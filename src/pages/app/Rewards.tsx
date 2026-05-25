@@ -35,7 +35,7 @@ export default function CustomerRewards() {
       setPoints(m.data?.loyalty_points ?? 0);
       setHistory((h.data as Redemption[]) ?? []);
       setLoading(false);
-    });
+    }).catch((err) => { console.error("Failed to load rewards:", err); setLoading(false); toast.error("Failed to load rewards"); });
   };
 
   useEffect(load, [cafe, user]);
